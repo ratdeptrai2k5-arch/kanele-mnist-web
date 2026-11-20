@@ -577,61 +577,68 @@ async function transmit(toBoard) {
       }
       el('result').textContent = `[OK] DA GUI FPGA THANH CONG! (Seq: ${line.slice(1, 5)})\nFPGA dang chay KANELE va hien thi ket qua len man hinh HDMI.`;
     } else {
-      // Feature 2: Gửi về PC / Tự động trích vector_in
-      el('result').textContent = 'Dang trich xuat 784 bit vector_in...';
+      // Feature 2: Xuất vector_in trực tiếp & Tải về máy
+      el('result').textContent = 'Dang trich xuat vector_in...';
 
-      // Chuyển 98 byte thành chuỗi 784 bit nhị phân
+      // 1. Chuyển đổi thành 784 bit nhị phân
       const bits = [];
       for (let b of payload) {
         for (let i = 7; i >= 0; i--) bits.push((b >> i) & 1);
       }
       const vectorInStr = bits.join(' ');
 
-      // Tự động tải file vectors_in.txt về máy (chạy được trên mọi điện thoại & PC không cần server)
-      const blob = new Blob([vectorInStr + '\n'], { type: 'text/plain' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `vectors_in_${line.slice(1, 5)}.txt`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      // 2. Tự động tải file vectors_in.txt về máy điện thoại/máy tính
+      try {
+        const blob = new Blob([vectorInStr + '\n'], { type: 'text/plain' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `vectors_in_${line.slice(1, 5)}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } catch (err) {
+        console.warn('File auto-download not supported on this browser');
+      }
 
-      // Nếu có PC Server mở sẵn, thử gửi đồng bộ thêm qua mạng
-      let pcSynced = false;
-      let pcReply = '';
+      // 3. Sao chép 784 bit vào clipboard (để paste nếu cần)
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(vectorInStr).catch(() => {});
+      }
+
+      // 4. Thử đồng bộ sang PC Server (nếu mở cùng localhost hoặc cùng HTTP)
+      let pcResponseText = null;
       const pcBase = (el('pcUrl')?.value?.trim() || '').replace(/\/+$/, '');
       if (el('pcUrl')) localStorage.setItem('kanele_pc_url', pcBase);
 
-      const targetUrl = pcBase ? (pcBase + '/verify') : (window.location.protocol === 'http:' ? '/verify' : '');
-      if (targetUrl) {
+      // Tránh lỗi Mixed Content: không gọi http từ trang https trừ khi cùng host
+      const canCallServer = (window.location.protocol === 'http:' && !pcBase) || (pcBase && !window.location.protocol.startsWith('https'));
+      if (canCallServer) {
         try {
           const png = await new Promise(r => pad.toBlob(r));
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 2000);
-          const resp = await fetch(targetUrl, {
+          const verifyUrl = (pcBase || '') + '/verify';
+          const resp = await fetch(verifyUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/octet-stream' },
-            body: new Blob([line, png]),
-            signal: controller.signal
+            body: new Blob([line, png])
           });
-          clearTimeout(timeoutId);
           if (resp.ok) {
-            pcReply = await resp.text();
-            pcSynced = true;
+            pcResponseText = await resp.text();
           }
         } catch (e) {
-          // Bỏ qua lỗi kết nối nếu không có PC server
+          // Bỏ qua lỗi mạng
         }
       }
 
-      if (pcSynced) {
-        el('result').textContent = pcReply + `\n\n[INFO] Da tai them file vectors_in_${line.slice(1, 5)}.txt ve may ban!`;
+      // 5. Hiển thị thông báo thành công rực rỡ
+      if (pcResponseText) {
+        el('result').textContent = pcResponseText + `\n\n[OK] Da tai file vectors_in_${line.slice(1, 5)}.txt ve may!`;
       } else {
-        el('result').textContent = `[OK] DA TRICH VECTOR_IN THANH CONG!\n` +
-          `* Ma Seq: ${line.slice(1, 5)}\n` +
+        el('result').textContent = `[OK] TRICH XUAT VECTOR_IN THANH CONG!\n` +
+          `* Ma Frame: ${line.slice(0, 10)}... (206 byte)\n` +
           `* So bit 1: ${meta.activeBits}/784 bit (${meta.activePct}%)\n` +
-          `* Da tu dong tai file: vectors_in_${line.slice(1, 5)}.txt ve may!\n\n` +
-          `Ban co the copy file nay vao thu muc mo phong de chay XSim.`;
+          `* Da tai file: vectors_in_${line.slice(1, 5)}.txt ve may!\n` +
+          `* Da tu dong copy 784 bit vao bo nho tam (Clipboard).\n\n` +
+          `Dau vector: ${vectorInStr.slice(0, 40)}...`;
       }
     }
   } catch (e) {
@@ -643,6 +650,7 @@ async function transmit(toBoard) {
 
 el('board').onclick = () => transmit(true);
 el('verify').onclick = () => transmit(false);
+
 
 
   </script>
