@@ -1,0 +1,615 @@
+﻿<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>KANELE MNIST -- BLE FPGA & PC Verification</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --success: #059669;
+      --success-hover: #047857;
+      --danger: #dc2626;
+      --danger-hover: #b91c1c;
+      --surface: #020617;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 16px;
+      line-height: 1.5;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 16px;
+    }
+    h1 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #38bdf8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .badge-container {
+      display: flex;
+      justify-content: center;
+      margin-top: 8px;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-weight: 500;
+    }
+    .status-badge.connected {
+      background: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.4);
+    }
+    .status-badge.disconnected {
+      background: rgba(148, 163, 184, 0.15);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+    .canvas-layout {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      justify-content: center;
+    }
+    canvas#pad {
+      display: block;
+      width: 250px;
+      height: 250px;
+      background: #000;
+      border: 2px solid #38bdf8;
+      border-radius: 10px;
+      touch-action: none;
+      cursor: crosshair;
+    }
+    .preview-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    canvas#preview {
+      display: block;
+      width: 84px;
+      height: 84px;
+      background: #000;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      image-rendering: pixelated;
+    }
+    .preview-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-align: center;
+    }
+    .preprocess-info {
+      font-size: 11px;
+      color: #38bdf8;
+      text-align: center;
+      margin-top: 8px;
+      font-family: monospace;
+    }
+    .button-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    button {
+      font-family: inherit;
+      font-size: 15px;
+      font-weight: 600;
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.15s ease;
+    }
+    button:active {
+      transform: scale(0.98);
+    }
+    button.btn-ble {
+      background: var(--primary);
+      color: #fff;
+    }
+    button.btn-ble:hover { background: var(--primary-hover); }
+    button.btn-verify {
+      background: var(--success);
+      color: #fff;
+    }
+    button.btn-verify:hover { background: var(--success-hover); }
+    button.btn-clear {
+      background: rgba(148, 163, 184, 0.2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    button.btn-clear:hover { background: rgba(148, 163, 184, 0.3); }
+    output#result {
+      display: block;
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      font-size: 13px;
+      font-family: monospace;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #e2e8f0;
+      min-height: 48px;
+    }
+    details {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 13px;
+      margin-top: 12px;
+    }
+    summary {
+      font-weight: 600;
+      cursor: pointer;
+      color: #38bdf8;
+      user-select: none;
+    }
+    .settings-body {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    input {
+      font-family: monospace;
+      font-size: 13px;
+      padding: 8px 10px;
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      width: 100%;
+    }
+    input:focus {
+      outline: none;
+      border-color: #38bdf8;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><span>âš¡</span> KANELE MNIST FPGA</h1>
+    <div class="subtitle">Standalone BLE & HDMI Hardware Acceleration</div>
+    <div class="badge-container">
+      <span id="bleBadge" class="status-badge disconnected">âšª BLE: ChÆ°a káº¿t ná»‘i</span>
+    </div>
+  </header>
+
+  <div class="card">
+    <div class="canvas-layout">
+      <div>
+        <canvas id="pad" width="250" height="250"></canvas>
+      </div>
+      <div class="preview-box">
+        <canvas id="preview" width="28" height="28"></canvas>
+        <div class="preview-label">Chuáº©n 28Ã—28<br>(FPGA Input)</div>
+      </div>
+    </div>
+    <div id="preprocessInfo" class="preprocess-info">Váº½ má»™t chá»¯ sá»‘ (0 - 9) báº±ng ngÃ³n tay...</div>
+
+    <div class="button-group">
+      <button id="board" class="btn-ble">ðŸ“¡ Gá»­i FPGA qua Bluetooth (BLE)</button>
+      <button id="verify" class="btn-verify">ðŸ’» Gá»­i vá» PC (TrÃ­ch vector & Kiá»ƒm chá»©ng)</button>
+      <button id="clear" class="btn-clear">ðŸ§¹ XÃ³a nÃ©t váº½</button>
+    </div>
+
+    <output id="result" aria-live="polite">Sáºµn sÃ ng. HÃ£y váº½ chá»¯ sá»‘ trÃªn mÃ n hÃ¬nh.</output>
+  </div>
+
+  <details>
+    <summary>âš™ï¸ CÃ i Ä‘áº·t & Káº¿t ná»‘i BLE / PC Server</summary>
+    <div class="settings-body">
+      <label>
+        Service UUID (Nordic UART Service)
+        <input id="service" value="6e400001-b5a3-f393-e0a9-e50e24dcca9e">
+      </label>
+      <label>
+        Write Characteristic UUID
+        <input id="write" value="6e400002-b5a3-f393-e0a9-e50e24dcca9e">
+      </label>
+      <button id="connect" class="btn-ble" style="margin-top: 4px;">Káº¿t ná»‘i Boolean Board</button>
+
+      <hr style="border: 0; border-top: 1px solid var(--border); margin: 6px 0;">
+      <label>
+        Äá»‹a chá»‰ PC Server (Äá»ƒ gá»­i trÃ­ch vector kiá»ƒm chá»©ng)
+        <input id="pcUrl" placeholder="VÃ­ dá»¥: http://192.168.1.10:8766 (Äá»ƒ trá»‘ng náº¿u cháº¡y localhost)">
+      </label>
+    </div>
+  </details>
+
+  <script>
+    if (isSecureContext && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(console.warn);
+    }
+    const pad = document.querySelector('#pad'), ctx = pad.getContext('2d'), result = document.querySelector('#result');
+    let pointer = null, version = 0;
+
+    function clearPad() {
+      version++;
+      ctx.fillStyle = 'black';
+      ctx.fillRect(0, 0, 250, 250);
+      result.textContent = 'ÄÃ£ xÃ³a. HÃ£y váº½ chá»¯ sá»‘ má»›i.';
+      const prevCanvas = document.querySelector('#preview');
+      if (prevCanvas) {
+        const pctx = prevCanvas.getContext('2d');
+        pctx.fillStyle = '#000';
+        pctx.fillRect(0, 0, 28, 28);
+      }
+      const infoEl = document.querySelector('#preprocessInfo');
+      if (infoEl) infoEl.textContent = 'Váº½ má»™t chá»¯ sá»‘ (0 - 9) báº±ng ngÃ³n tay...';
+    }
+    clearPad();
+    document.querySelector('#clear').onclick = clearPad;
+
+    function point(e) {
+      const r = pad.getBoundingClientRect();
+      return [(e.clientX - r.left) * 250 / r.width, (e.clientY - r.top) * 250 / r.height];
+    }
+    pad.onpointerdown = e => {
+      if (pointer !== null) return;
+      version++;
+      result.textContent = 'Äang váº½...';
+      pointer = e.pointerId;
+      pad.setPointerCapture(pointer);
+      const [x, y] = point(e);
+      ctx.fillStyle = 'white';
+      ctx.beginPath();
+      ctx.arc(x, y, 9, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth = 18;
+      ctx.lineCap = ctx.lineJoin = 'round';
+    };
+    pad.onpointermove = e => {
+      if (pointer === e.pointerId) {
+        ctx.lineTo(...point(e));
+        ctx.stroke();
+      }
+    };
+    pad.onlostpointercapture = e => {
+      if (pointer === e.pointerId) pointer = null;
+    };
+  </script>
+
+<script>
+const thresholds = [[0,null],[1,null],[0,null],[0,null],[1,null],[1,null],[0,null],[0,null],[0,null],[0,null],[0,null],[0,null],[1,null],[0,null],[0,null],[0,null],[0,null],[0,null],[0,null],[0,null],[1,null],[1,null],[0,null],[1,null],[1,null],[0,null],[1,null],[1,null],[1,null],[0,null],[0,null],[0,null],[1,null],[1,null],[0,null],[0,0.7717708945274353],[0,0.6880613565444946],[1,null],[1,null],[0,2.77097749710083],[0,0.6620023846626282],[1,null],[1,null],[0,2.8834400177001953],[0,null],[1,null],[0,0.45805594325065613],[0,1.0428142547607422],[0,0.011002310551702976],[1,null],[0,null],[0,null],[1,null],[1,null],[1,null],[0,null],[0,null],[0,null],[0,null],[0,null],[1,null],[0,0.05059618875384331],[0,0.07534046471118927],[0,0.04332337900996208],[0,0.7487328052520752],[0,1.988650918006897],[1,null],[0,0.551793098449707],[0,3.1835062503814697],[0,1.392167568206787],[0,3.9261558055877686],[0,5.798349857330322],[0,2.015259027481079],[0,3.120042085647583],[0,3.9805915355682373],[0,1.466007947921753],[1,null],[0,0.9531542062759399],[0,0.264175146818161],[0,0.3222094178199768],[0,null],[0,null],[0,null],[0,null],[0,null],[0,null],[0,null],[0,null],[1,null],[1,null],[1,null],[0,0.6295521259307861],[0,0.6918726563453674],[0,10.904133796691895],[1,null],[1,null],[0,9.733652114868164],[1,null],[0,8.107460975646973],[0,20.992107391357422],[0,9.972129821777344],[0,10.401864051818848],[0,6.340783596038818],[0,9.45079517364502],[1,null],[0,1.3994135856628418],[1,null],[0,0.005283616483211517],[1,null],[0,0.0036003070417791605],[0,null],[0,null],[0,null],[0,null],[0,0.07821311056613922],[1,null],[0,0.4616771340370178],[0,4.175837993621826],[1,null],[1,null],[0,8.493013381958008],[0,11.773099899291992],[0,8.356145858764648],[0,111.42709350585938],[0,113.47081756591797],[0,73.76480865478516],[0,66.47456359863281],[0,54.217315673828125],[0,13.316235542297363],[0,30.02835464477539],[0,21.58708381652832],[0,9.593818664550781],[0,9.923314094543457],[1,null],[1,null],[0,2.7556703090667725],[0,0.436594694852829],[1,null],[0,0.244047611951828],[0,null],[0,null],[0,null],[0,0.01799393631517887],[1,null],[1,null],[1,null],[1,null],[1,null],[0,20.918272018432617],[0,37.185951232910156],[0,58.15669631958008],[0,70.28250122070312],[0,54.0042724609375],[0,50.76655197143555],[0,45.10529327392578],[0,69.424560546875],[0,77.51596069335938],[0,63.14951705932617],[0,52.186561584472656],[0,86.42774963378906],[0,19.932174682617188],[0,52.04755401611328],[0,21.3353271484375],[1,null],[0,2.964780807495117],[0,0.7564197182655334],[0,0.017773548141121864],[0,null],[0,null],[0,null],[1,null],[0,0.26514407992362976],[0,1.3354326486587524],[1,null],[1,null],[0,4.8025383949279785],[0,58.6840934753418],[0,72.86422729492188],[0,64.90704345703125],[0,57.03350067138672],[0,73.54582977294922],[0,154.95005798339844],[0,136.57015991210938],[0,129.95143127441406],[0,145.08966064453125],[0,103.41248321533203],[0,103.60330963134766],[0,80.16809844970703],[0,65.89483642578125],[0,31.793790817260742],[0,37.80325698852539],[0,7.7483344078063965],[0,4.341702938079834],[1,null],[0,0.12723428010940552],[0,null],[0,null],[1,null],[1,null],[1,null],[0,1.8959871530532837],[0,4.393919944763184],[0,16.19162940979004],[0,23.36601448059082],[0,44.055850982666016],[0,89.84126281738281],[0,82.56777954101562],[0,171.93055725097656],[0,125.25131225585938],[0,77.51077270507812],[0,162.45982360839844],[0,134.176025390625],[0,133.12774658203125],[0,119.88203430175781],[0,129.044921875],[0,134.4180145263672],[0,29.007503509521484],[0,18.118898391723633],[0,29.343830108642578],[0,239.51205444335938],[0,15.173169136047363],[0,3.6277196407318115],[0,0.9183405041694641],[0,null],[1,null],[0,null],[1,null],[0,8.284884452819824],[1,null],[0,9.716961860656738],[1,null],[0,null],[0,33.729820251464844],[0,30.032651901245117],[0,86.67802429199219],[0,113.50021362304688],[0,142.2181854248047],[0,68.16380310058594],[0,145.42575073242188],[0,146.77464294433594],[0,150.98191833496094],[0,146.2804412841797],[0,135.88204956054688],[0,53.8678092956543],[0,57.09351348876953],[0,76.76563262939453],[0,33.53093338012695],[0,92.0699234008789],[0,17.37963104248047],[1,null],[0,3.624417781829834],[0,0.013449379242956638],[1,null],[0,0.2991788685321808],[0,2.561969757080078],[0,5.311171531677246],[1,null],[1,null],[0,60.75777053833008],[0,113.43736267089844],[0,87.36467742919922],[0,117.51720428466797],[0,99.19708251953125],[0,133.99502563476562],[0,145.2362060546875],[0,102.95492553710938],[0,132.72372436523438],[0,175.77304077148438],[0,166.1863555908203],[0,113.96792602539062],[0,89.3683853149414],[0,124.6726303100586],[0,68.01575469970703],[0,24.873620986938477],[0,36.634910583496094],[0,15.177766799926758],[0,23.42374610900879],[1,null],[0,0.7296919226646423],[0,null],[1,null],[0,0.03536280244588852],[0,0.7983314394950867],[0,2.937636613845825],[0,4.333212852478027],[0,24.39244842529297],[0,32.919586181640625],[0,13.421308517456055],[0,95.57837677001953],[0,117.05744934082031],[0,148.47262573242188],[0,127.54164123535156],[0,104.11068725585938],[0,148.316650390625],[0,185.61300659179688],[0,182.6436309814453],[0,166.91281127929688],[0,112.37937927246094],[0,102.78714752197266],[0,133.880615234375],[0,118.79156494140625],[0,84.5240707397461],[0,31.56827163696289],[0,44.99919128417969],[1,null],[0,1.2407872676849365],[0,4.168402194976807],[0,null],[0,0.04565265029668808],[1,null],[0,0.48129168152809143],[1,null],[0,3.2664921283721924],[0,20.17128562927246],[0,57.63307571411133],[0,64.144775390625],[0,88.20704650878906],[0,150.93215942382812],[0,184.80224609375],[0,168.75802612304688],[0,135.2691650390625],[0,169.40492248535156],[0,129.07177734375],[0,136.43092346191406],[0,116.11768341064453],[0,140.51611328125],[0,152.5086212158203],[0,119.3613510131836],[0,129.22500610351562],[0,56.047454833984375],[0,38.43001174926758],[0,45.40715026855469],[0,5.458353042602539],[0,0.38478827476501465],[1,null],[0,null],[1,null],[0,0.08303885161876678],[0,1.062234878540039],[1,null],[0,8.457086563110352],[1,null],[0,44.44430160522461],[0,138.9776611328125],[0,135.22308349609375],[0,139.28810119628906],[0,139.32440185546875],[0,155.30772399902344],[0,120.51564025878906],[0,103.9222640991211],[0,128.505859375],[0,112.84194946289062],[0,161.79588317871094],[0,146.34307861328125],[0,135.4575958251953],[0,60.63123321533203],[0,116.25125122070312],[0,77.05020904541016],[0,65.1284408569336],[0,27.550905227661133],[0,6.313119411468506],[0,1.0068682432174683],[1,null],[1,null],[0,null],[0,null],[1,null],[0,0.2871297001838684],[1,null],[0,14.436718940734863],[0,97.1427001953125],[0,129.4799346923828],[0,130.28652954101562],[0,69.21920776367188],[0,132.3776092529297],[0,129.29107666015625],[0,131.05413818359375],[0,99.09919738769531],[0,138.4017791748047],[0,153.0939178466797],[0,159.10519409179688],[0,211.12728881835938],[0,131.30184936523438],[0,60.168941497802734],[0,50.81560134887695],[0,54.440616607666016],[0,51.50768280029297],[0,66.73369598388672],[1,null],[0,0.291275292634964],[0,0.00519242137670517],[1,null],[1,null],[1,null],[0,null],[0,2.649477481842041],[0,1.9776029586791992],[0,58.58407211303711],[0,122.65132141113281],[0,136.18565368652344],[0,127.51702117919922],[0,158.70016479492188],[0,126.00608825683594],[0,112.09622192382812],[0,135.12989807128906],[0,150.5045623779297],[0,105.41404724121094],[0,133.42474365234375],[0,115.42967224121094],[0,142.4698028564453],[0,100.9583969116211],[0,74.79712677001953],[0,73.4212417602539],[0,32.663028717041016],[0,36.35174560546875],[0,30.308635711669922],[0,6.141241073608398],[0,2.8354053497314453],[0,0.35650259256362915],[1,null],[0,null],[0,null],[1,null],[1,null],[0,5.740780353546143],[0,46.64597702026367],[0,89.20817565917969],[0,97.92039489746094],[0,207.7889404296875],[0,152.5867462158203],[0,121.72547912597656],[0,69.47515869140625],[0,122.03279113769531],[0,139.2791748046875],[0,118.56683349609375],[0,110.36591339111328],[0,164.4108123779297],[0,207.70574951171875],[0,99.88054656982422],[0,68.52172088623047],[0,104.85599517822266],[0,21.9151611328125],[0,45.37058639526367],[0,6.215793132781982],[1,null],[1,null],[1,null],[1,null],[0,null],[0,null],[1,null],[1,null],[1,null],[0,17.466114044189453],[0,null],[0,null],[0,126.08148956298828],[0,142.13272094726562],[0,135.2097930908203],[0,99.3264389038086],[0,142.63497924804688],[0,134.62350463867188],[0,151.32066345214844],[0,161.14646911621094],[0,134.27146911621094],[0,157.6581268310547],[0,63.40591812133789],[0,122.7708969116211],[0,25.46330451965332],[0,113.5951156616211],[0,35.45155715942383],[1,null],[1,null],[1,null],[0,1.1170583963394165],[1,null],[0,null],[0,null],[1,null],[0,1.4349455833435059],[0,2.127753973007202],[0,4.541579723358154],[0,58.70623016357422],[0,53.28239822387695],[0,250.05648803710938],[0,168.6067352294922],[0,135.10604858398438],[0,146.7425079345703],[0,149.9240264892578],[0,146.15301513671875],[0,157.61782836914062],[0,161.33665466308594],[0,103.30210876464844],[0,109.94728088378906],[0,72.5506362915039],[0,31.240840911865234],[0,30.413311004638672],[0,67.55426025390625],[0,36.01547622680664],[0,11.6470308303833],[1,null],[0,0.9390949606895447],[0,0.6310872435569763],[0,0.08117314428091049],[0,null],[1,null],[1,null],[1,null],[0,7.106752395629883],[0,109.43431091308594],[0,78.17845153808594],[0,114.95313262939453],[0,82.00884246826172],[0,148.4737091064453],[0,128.75390625],[0,111.9906005859375],[0,112.26377868652344],[0,196.87631225585938],[0,116.05011749267578],[0,148.66595458984375],[0,112.04756927490234],[0,108.7159194946289],[0,16.011903762817383],[0,44.250003814697266],[0,38.60552215576172],[0,89.04619598388672],[0,17.92432403564453],[0,5.138716697692871],[0,0.0457286462187767],[0,2.2381131649017334],[0,1.1334431171417236],[1,null],[1,null],[0,0.11589568108320236],[0,2.8734259605407715],[1,null],[0,9.210837364196777],[0,61.18437957763672],[0,85.61979675292969],[0,74.17510223388672],[0,88.57999420166016],[0,213.65121459960938],[0,80.987548828125],[0,130.6873321533203],[0,133.37002563476562],[0,103.12347412109375],[0,164.7811279296875],[0,113.5285415649414],[0,87.9200668334961],[0,74.7564468383789],[0,126.97038269042969],[0,115.7113265991211],[0,40.62505340576172],[0,59.887184143066406],[0,65.25181579589844],[1,null],[1,null],[1,null],[1,null],[1,null],[1,null],[0,0.0523516945540905],[0,4.045091152191162],[0,3.826758623123169],[1,null],[0,17.319238662719727],[0,88.20375061035156],[0,72.65036010742188],[0,86.76988983154297],[0,119.4046401977539],[0,141.6908416748047],[0,140.45396423339844],[0,126.7398910522461],[0,150.10816955566406],[0,100.48445129394531],[0,152.0971221923828],[0,58.17424011230469],[0,20.86981773376465],[0,80.9219970703125],[0,26.0129337310791],[0,25.217378616333008],[0,31.097984313964844],[0,13.387486457824707],[1,null],[1,null],[1,null],[0,0.050356797873973846],[0,null],[0,null],[0,0.01766335219144821],[0,0.2878098785877228],[1,null],[0,9.92090892791748],[0,5.769233226776123],[0,43.12895202636719],[0,27.633384704589844],[0,160.6623077392578],[0,46.630611419677734],[0,64.75743103027344],[0,91.75603485107422],[0,151.471923828125],[0,137.98155212402344],[0,80.44486236572266],[0,56.73762512207031],[0,82.00779724121094],[0,40.983150482177734],[0,49.685787200927734],[0,107.11353302001953],[0,30.203603744506836],[0,48.44743347167969],[0,3.7347426414489746],[1,null],[0,1.4326086044311523],[0,2.367541790008545],[0,0.04984002560377121],[0,null],[0,null],[1,null],[1,null],[0,0.5739117860794067],[1,null],[1,null],[0,29.01795196533203],[0,40.24028015136719],[0,53.48663330078125],[0,39.4897575378418],[0,112.53421783447266],[0,78.6855697631836],[0,125.8359146118164],[0,80.31658935546875],[0,76.32191467285156],[0,71.5235595703125],[0,36.791202545166016],[0,25.334238052368164],[0,29.950178146362305],[0,38.17835235595703],[1,null],[0,7.0898966789245605],[1,null],[1,null],[1,null],[0,0.1473693996667862],[0,0.03454585000872612],[0,null],[1,null],[1,null],[1,null],[1,null],[1,null],[1,null],[1,null],[0,70.19176483154297],[0,70.6726303100586],[0,50.75695037841797],[0,50.796566009521484],[0,73.45909881591797],[0,159.9683837890625],[0,104.62089538574219],[0,64.36152648925781],[0,74.6866226196289],[0,61.50624084472656],[0,70.26496124267578],[0,126.67675018310547],[1,null],[1,null],[0,6.225826740264893],[0,5.195618629455566],[0,0.8828960061073303],[1,null],[0,null],[1,null],[0,null],[0,null],[0,null],[0,null],[0,0.1139007955789566],[1,null],[1,null],[0,5.63050651550293],[0,115.91014862060547],[0,22.546377182006836],[0,145.24940490722656],[0,52.918678283691406],[0,33.210880279541016],[0,64.12989044189453],[0,70.79981231689453],[0,83.57035064697266],[0,16.313968658447266],[0,64.69122314453125],[0,26.223264694213867],[0,0.10428731143474579],[1,null],[0,2.3144853115081787],[0,1.5958356857299805],[0,0.5109756588935852],[0,3.072274684906006],[1,null],[1,null],[0,null],[1,null],[0,null],[0,null],[0,null],[0,null],[0,0.32715296745300293],[0,3.9700927734375],[1,null],[0,3.8085498809814453],[0,9.414178848266602],[0,19.045677185058594],[0,7.412675380706787],[1,null],[0,21.18227195739746],[0,16.459917068481445],[0,21.089750289916992],[0,4.99165678024292],[1,null],[1,null],[1,41.68082809448242],[0,2.8371646404266357],[1,null],[0,6.484032154083252],[0,7.123483180999756],[0,8.140719413757324],[0,0.9315447211265564],[1,null],[0,null],[0,null],[0,null],[1,null],[1,null],[0,null],[0,0.05577151104807854],[0,0.53312087059021],[1,null],[0,0.7429532408714294],[0,8.583498001098633],[1,null],[1,null],[1,null],[1,null],[0,3.9411191940307617],[0,6.634502410888672],[0,5.553213596343994],[0,3.135575532913208],[1,null],[1,null],[1,null],[0,0.16962480545043945],[0,0.42424535751342773],[0,0.27245110273361206],[0,0.23746256530284882],[0,null],[0,null],[0,null],[1,null],[0,null],[1,null],[1,null],[0,null],[0,0.07883627712726593],[0,0.4560610353946686],[1,null],[1,null],[0,0.4576607644557953],[0,0.44933539628982544],[0,1.3628178834915161],[0,0.5309169888496399],[1,null],[0,1.5947717428207397],[0,0.7481856346130371],[0,0.29458490014076233],[0,0.07106949388980865],[1,null],[0,0.25391948223114014],[0,0.3938963711261749],[0,0.23677480220794678],[0,null],[1,null],[0,null],[0,null],[0,null],[1,null],[0,null]];
+// Pillow-style bilinear reduction: widen the triangle filter when shrinking.
+function weights(n, m, i) {
+  const scale = n / m, width = Math.max(1, scale), center = (i + 0.5) * scale;
+  const taps = [];
+  for (let j = Math.max(0, Math.floor(center - width)); j < Math.min(n, Math.ceil(center + width)); j++) {
+    const w = Math.max(0, 1 - Math.abs(j + 0.5 - center) / width);
+    if (w) taps.push([j, w]);
+  }
+  const total = taps.reduce((a, t) => a + t[1], 0);
+  return taps.map(([j, w]) => [j, Math.round(w / total * 4194304)]);
+}
+
+function quantizeWithMeta(rgba, size, table) {
+  let left = size, right = -1, top = size, bottom = -1;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      if (rgba[4 * (y * size + x)] > 20) {
+        left = Math.min(left, x);
+        right = Math.max(right, x);
+        top = Math.min(top, y);
+        bottom = Math.max(bottom, y);
+      }
+    }
+  }
+  if (right < left) return null;
+
+  const w = right - left + 1, h = bottom - top + 1;
+  const evenRound = x => x % 1 === 0.5 ? 2 * Math.round(x / 2) : Math.round(x);
+  const scale = 20 / Math.max(w, h);
+  const nw = Math.max(1, evenRound(w * scale));
+  const nh = Math.max(1, evenRound(h * scale));
+
+  const tmp = new Uint8Array(nw * h);
+  const out = new Uint8Array(784);
+  function sample(taps, get) {
+    return Math.min(255, Math.floor((2097152 + taps.reduce((a, [i, k]) => a + k * get(i), 0)) / 4194304));
+  }
+
+  for (let x = 0; x < nw; x++) {
+    const taps = weights(w, nw, x);
+    for (let y = 0; y < h; y++) {
+      tmp[y * nw + x] = sample(taps, i => rgba[4 * ((y + top) * size + left + i)]);
+    }
+  }
+
+  let mass = 0, mx = 0, my = 0;
+  for (let y = 0; y < nh; y++) {
+    const taps = weights(h, nh, y);
+    for (let x = 0; x < nw; x++) {
+      const v = sample(taps, i => tmp[i * nw + x]);
+      const xx = x + ((28 - nw) >> 1);
+      const yy = y + ((28 - nh) >> 1);
+      out[yy * 28 + xx] = v;
+      mass += v;
+      mx += xx * v;
+      my += yy * v;
+    }
+  }
+  if (Math.max(...out) < 5 || mass === 0) return null;
+
+  const packed = new Uint8Array(98);
+  const preview28 = new Uint8Array(784);
+  let activeBits = 0;
+
+  for (let i = 0; i < 784; i++) {
+    const x = (i % 28) + (mx / mass - 14);
+    const y = Math.floor(i / 28) + (my / mass - 14);
+    let v = 0;
+    if (x >= 0 && y >= 0 && x <= 27 && y <= 27) {
+      const a = Math.floor(x), b = Math.floor(y), dx = x - a, dy = y - b;
+      const at = (xx, yy) => out[Math.min(27, yy) * 28 + Math.min(27, xx)];
+      v = Math.fround((1 - dy) * ((1 - dx) * at(a, b) + dx * at(a + 1, b)) + dy * ((1 - dx) * at(a, b + 1) + dx * at(a + 1, b + 1)));
+    }
+    preview28[i] = Math.min(255, Math.max(0, Math.round(v)));
+    const [first, threshold] = table[i];
+    const bit = first ^ Number(threshold !== null && v >= threshold);
+    if (bit) activeBits++;
+    packed[i >> 3] |= bit << (7 - (i % 8));
+  }
+
+  return {
+    packed,
+    preview28,
+    activeBits,
+    activePct: ((activeBits / 784) * 100).toFixed(1),
+    bbox: { left, right, top, bottom, w, h },
+    com: { cx: (mx / mass).toFixed(1), cy: (my / mass).toFixed(1) }
+  };
+}
+
+const hex = (v, w) => v.toString(16).toUpperCase().padStart(w, '0');
+
+function crc(bytes) {
+  let c = 65535;
+  for (const b of bytes) {
+    c ^= b << 8;
+    for (let j = 0; j < 8; j++) {
+      c = ((c << 1) ^ ((c & 32768) ? 4129 : 0)) & 65535;
+    }
+  }
+  return c;
+}
+
+let writer = null, gattDevice = null, sequence = 0, busy = false, lastBody = null, lastLine = null;
+const el = id => document.getElementById(id);
+
+// Load persisted settings
+const DEFAULT_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+const DEFAULT_WRITE_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+
+function initSettings() {
+  if (el('service')) el('service').value = localStorage.getItem('kanele_ble_service') || DEFAULT_SERVICE_UUID;
+  if (el('write')) el('write').value = localStorage.getItem('kanele_ble_write') || DEFAULT_WRITE_UUID;
+  if (el('pcUrl')) el('pcUrl').value = localStorage.getItem('kanele_pc_url') || '';
+}
+initSettings();
+
+function updateBleBadge(connected, name) {
+  const badge = el('bleBadge');
+  const btn = el('connect');
+  if (!badge) return;
+  if (connected) {
+    badge.textContent = 'ðŸŸ¢ BLE: ' + (name || 'ÄÃ£ káº¿t ná»‘i');
+    badge.className = 'status-badge connected';
+    if (btn) btn.textContent = 'Ngáº¯t káº¿t ná»‘i BLE';
+  } else {
+    badge.textContent = 'âšª BLE: ChÆ°a káº¿t ná»‘i';
+    badge.className = 'status-badge disconnected';
+    if (btn) btn.textContent = 'Káº¿t ná»‘i Boolean Board';
+  }
+}
+
+// Bluetooth connect / disconnect
+el('connect').onclick = async () => {
+  if (writer && gattDevice && gattDevice.gatt.connected) {
+    try { gattDevice.gatt.disconnect(); } catch (e) {}
+    writer = null;
+    gattDevice = null;
+    updateBleBadge(false);
+    el('result').textContent = 'ÄÃ£ ngáº¯t káº¿t ná»‘i BLE.';
+    return;
+  }
+
+  try {
+    if (!navigator.bluetooth) {
+      throw Error('TrÃ¬nh duyá»‡t cáº§n há»— trá»£ Web Bluetooth (Chrome Android qua HTTPS hoáº·c localhost).');
+    }
+    const serviceId = (el('service').value.trim() || DEFAULT_SERVICE_UUID).toLowerCase();
+    const writeId = (el('write').value.trim() || DEFAULT_WRITE_UUID).toLowerCase();
+    localStorage.setItem('kanele_ble_service', serviceId);
+    localStorage.setItem('kanele_ble_write', writeId);
+
+    el('result').textContent = 'Äang quÃ©t thiáº¿t bá»‹ Bluetooth...';
+    const device = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: [serviceId]
+    });
+
+    el('result').textContent = 'Äang káº¿t ná»‘i tá»›i ' + (device.name || 'kit') + '...';
+    gattDevice = device;
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(serviceId);
+    writer = await service.getCharacteristic(writeId);
+
+    device.addEventListener('gattserverdisconnected', () => {
+      writer = null;
+      gattDevice = null;
+      updateBleBadge(false);
+      el('result').textContent = 'BLE Ä‘Ã£ ngáº¯t káº¿t ná»‘i.';
+    });
+
+    updateBleBadge(true, device.name);
+    el('result').textContent = 'âœ“ ÄÃ£ káº¿t ná»‘i BLE thÃ nh cÃ´ng vá»›i ' + (device.name || 'kit') + '!';
+  } catch (e) {
+    updateBleBadge(false);
+    el('result').textContent = 'Lá»—i BLE: ' + e.message;
+  }
+};
+
+// Render 28x28 visual preview and metadata
+function updatePreview() {
+  if (typeof thresholds === 'undefined') return null;
+  const meta = quantizeWithMeta(ctx.getImageData(0, 0, 250, 250).data, 250, thresholds);
+  const prevCanvas = el('preview');
+  const infoEl = el('preprocessInfo');
+  if (!prevCanvas) return meta;
+
+  const pctx = prevCanvas.getContext('2d');
+  if (!meta) {
+    pctx.fillStyle = '#111';
+    pctx.fillRect(0, 0, 28, 28);
+    if (infoEl) infoEl.textContent = 'ChÆ°a cÃ³ nÃ©t váº½.';
+    return null;
+  }
+
+  const imgData = pctx.createImageData(28, 28);
+  for (let i = 0; i < 784; i++) {
+    const val = meta.preview28[i];
+    imgData.data[4 * i] = val;
+    imgData.data[4 * i + 1] = val;
+    imgData.data[4 * i + 2] = val;
+    imgData.data[4 * i + 3] = 255;
+  }
+  pctx.putImageData(imgData, 0, 0);
+
+  if (infoEl) {
+    infoEl.textContent = `BBox: ${meta.bbox.w}Ã—${meta.bbox.h} | CoM: (${meta.com.cx}, ${meta.com.cy}) | Active: ${meta.activeBits}/784 bit (${meta.activePct}%)`;
+  }
+  return meta;
+}
+
+// Hook pointer events on canvas to update preview
+pad.addEventListener('pointerup', () => setTimeout(updatePreview, 50));
+
+async function transmit(toBoard) {
+  if (busy) return;
+  busy = true;
+  try {
+    const meta = updatePreview();
+    if (!meta || !meta.packed) {
+      el('result').textContent = 'HÃ£y váº½ má»™t chá»¯ sá»‘ (0 - 9) trÆ°á»›c khi gá»­i.';
+      return;
+    }
+    const payload = meta.packed;
+    const body = Array.from(payload, b => hex(b, 2)).join('');
+    if (body !== lastBody) {
+      const seq = sequence++ & 65535;
+      lastLine = 'I' + hex(seq, 4) + body + hex(crc([73, seq >> 8, seq & 255, ...payload]), 4) + '\n';
+      lastBody = body;
+    }
+    const line = lastLine;
+
+    if (toBoard) {
+      // Feature 1: Gá»­i FPGA qua BLE
+      if (!writer) {
+        throw Error('ChÆ°a káº¿t ná»‘i Bluetooth vá»›i Boolean Board! HÃ£y má»Ÿ má»¥c "CÃ i Ä‘áº·t & Káº¿t ná»‘i BLE" bÃªn dÆ°á»›i Ä‘á»ƒ káº¿t ná»‘i.');
+      }
+      el('result').textContent = 'Äang truyá»n gÃ³i 206 byte sang FPGA qua BLE...';
+      const bytes = new TextEncoder().encode(line);
+      const totalChunks = Math.ceil(bytes.length / 20);
+      for (let i = 0; i < bytes.length; i += 20) {
+        const chunk = bytes.slice(i, i + 20);
+        if (writer.properties.write) {
+          await writer.writeValueWithResponse(chunk);
+        } else {
+          await writer.writeValueWithoutResponse(chunk);
+        }
+      }
+      el('result').textContent = `âœ“ ÄÃƒ Gá»¬I FPGA THÃ€NH CÃ”NG! (Seq: ${line.slice(1, 5)})\nâ†’ FPGA Ä‘ang cháº¡y KANELE vÃ  hiá»ƒn thá»‹ chá»¯ sá»‘ lÃªn mÃ n hÃ¬nh HDMI.`;
+    } else {
+      // Feature 2: Gá»­i vá» PC (Xuáº¥t vector_in & Kiá»ƒm chá»©ng)
+      el('result').textContent = 'Äang gá»­i sang PC Ä‘á»ƒ kiá»ƒm chá»©ng byte-exact vÃ  trÃ­ch vector...';
+      const png = await new Promise(r => pad.toBlob(r));
+      const pcBase = (el('pcUrl')?.value?.trim() || '').replace(/\/+$/, '');
+      if (el('pcUrl')) localStorage.setItem('kanele_pc_url', pcBase);
+
+      const verifyEndpoint = (pcBase ? pcBase : '') + '/verify';
+      const resp = await fetch(verifyEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: new Blob([line, png])
+      });
+
+      if (resp.status === 422) {
+        throw Error('Cáº¢NH BÃO: 98 byte tiá»n xá»­ lÃ½ trÃªn Ä‘iá»‡n thoáº¡i khÃ¡c vá»›i káº¿t quáº£ cá»§a PC!');
+      }
+      if (!resp.ok) {
+        throw Error(`PC pháº£n há»“i lá»—i HTTP ${resp.status}. Kiá»ƒm tra láº¡i server phone_draw.py trÃªn PC.`);
+      }
+      const replyText = await resp.text();
+      el('result').textContent = replyText;
+    }
+  } catch (e) {
+    el('result').textContent = 'Lá»—i: ' + e.message;
+  } finally {
+    busy = false;
+  }
+}
+
+el('board').onclick = () => transmit(true);
+el('verify').onclick = () => transmit(false);
+
+</script>
+</body>
+</html>
+
