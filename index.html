@@ -574,8 +574,10 @@ async function transmit(toBoard) {
         } else {
           await writer.writeValueWithoutResponse(chunk);
         }
+        // Gian cach 15ms giua cac chunk de tranh tran UART ring-buffer tren radio SoC
+        await new Promise(r => setTimeout(r, 15));
       }
-      el('result').textContent = `[OK] DA GUI FPGA THANH CONG! (Seq: ${line.slice(1, 5)})\nFPGA dang chay KANELE va hien thi ket qua len man hinh HDMI.`;
+      el('result').textContent = `[GUI BLE XONG] Da truyen 206 byte toi radio BLE (Seq: ${line.slice(1, 5)}).\nQuan sat man hinh HDMI de xem ket qua suy luan.\n(Luu y: Top FPGA chi co UART RX; neu man hinh van giu nguyen so cu hoac dau -, kiem tra BLE/UART 115200 hoac bam Reset tren kit).`;
     } else {
       // Feature 2: Xuất vector_in trực tiếp & Tải về máy
       el('result').textContent = 'Dang trich xuat vector_in...';
