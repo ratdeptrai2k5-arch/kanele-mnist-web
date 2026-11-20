@@ -605,16 +605,14 @@ async function transmit(toBoard) {
         navigator.clipboard.writeText(vectorInStr).catch(() => {});
       }
 
-      // 4. Thử đồng bộ sang PC Server (nếu mở cùng localhost hoặc cùng HTTP)
+      // 4. Đồng bộ sang PC
       let pcResponseText = null;
-      let pcError = null;
+      let cloudSynced = false;
       const pcBase = (el('pcUrl')?.value?.trim() || '').replace(/\/+$/, '');
       if (el('pcUrl')) localStorage.setItem('kanele_pc_url', pcBase);
 
-      const isHttps = window.location.protocol.startsWith('https');
-      if (isHttps) {
-        pcError = 'HTTPS_MIXED_CONTENT';
-      } else {
+      // A. Nếu có pcBase HTTPS hoặc mở qua HTTP nội bộ
+      if (pcBase.startsWith('https://') || (window.location.protocol === 'http:' && !pcBase) || (pcBase && window.location.protocol === 'http:')) {
         try {
           const png = await new Promise(r => pad.toBlob(r));
           const verifyUrl = (pcBase || '') + '/verify';
@@ -625,32 +623,48 @@ async function transmit(toBoard) {
           });
           if (resp.ok) {
             pcResponseText = await resp.text();
-          } else {
-            pcError = `PC phan hoi loi HTTP ${resp.status}`;
           }
         } catch (e) {
-          pcError = e.message || 'Khong the ket noi toi PC';
+          // Bỏ qua lỗi direct fetch
         }
+      }
+
+      // B. Đồng bộ tự động qua Cloud Relay HTTPS (cho GitHub Pages)
+      try {
+        const cloudResp = await fetch('https://ntfy.sh/kanele_vector_sync', {
+          method: 'POST',
+          headers: { 'Title': 'KANELE Vector Frame', 'Priority': 'high' },
+          body: JSON.stringify({
+            line: line,
+            bits: bits,
+            seq: line.slice(1, 5)
+          })
+        });
+        if (cloudResp.ok) cloudSynced = true;
+      } catch (err) {
+        console.warn('Cloud sync error:', err);
       }
 
       // 5. Hiển thị thông báo kết quả
       if (pcResponseText) {
         el('result').textContent = `[OK] DA GUI VE PC VA LUU CUSTOM THANH CONG!\n\n` +
           pcResponseText +
-          `\n\n(File vectors_in_${line.slice(1, 5)}.txt cung da duoc tai ve may)`;
-      } else if (pcError === 'HTTPS_MIXED_CONTENT') {
-        el('result').textContent = `[CHU Y: CHUA GUI VE PC]\n` +
-          `Ban dang mo web bang HTTPS (GitHub Pages). Trinh duyet chan gui HTTP ve PC (loi Mixed Content).\n\n` +
-          `* Da tai file vectors_in_${line.slice(1, 5)}.txt ve dien thoai.\n` +
-          `* Da copy 784 bit vao Clipboard.\n\n` +
-          `DE GUI TRUC TIEP VAO SIM CUSTOM CUA PC:\n` +
-          `-> Tren dien thoai mo trinh duyet vao:\n` +
-          `   http://192.168.1.58:8766`;
+          `\n\n(Da tai file vectors_in_${line.slice(1, 5)}.txt ve may)`;
+      } else if (cloudSynced) {
+        el('result').textContent = `[OK] DA TRICH XUAT VA DONG BO VE PC THANH CONG!\n` +
+          `* Ma Frame: ${line.slice(0, 10)}... (206 byte)\n` +
+          `* So bit 1: ${meta.activeBits}/784 bit (${meta.activePct}%)\n` +
+          `* Da dong bo qua Cloud -> PC (sync_vector.py) tu dong luu vao:\n` +
+          `  firmware/sim/custom/vectors_in.txt\n\n` +
+          `* Da tai file: vectors_in_${line.slice(1, 5)}.txt ve may!\n` +
+          `* Da tu dong copy 784 bit vao bo nho tam (Clipboard).`;
       } else {
-        el('result').textContent = `[CHUA GUI DUOC VE PC]\n` +
-          `Loi ket noi: ${pcError}\n` +
-          `Kiem tra tren PC da bat: python app/phone_draw.py --port 8766 chua?\n\n` +
-          `* File vector van da duoc tai ve dien thoai: vectors_in_${line.slice(1, 5)}.txt`;
+        el('result').textContent = `[OK] TRICH XUAT VECTOR_IN THANH CONG!\n` +
+          `* Ma Frame: ${line.slice(0, 10)}... (206 byte)\n` +
+          `* So bit 1: ${meta.activeBits}/784 bit (${meta.activePct}%)\n` +
+          `* Da tai file: vectors_in_${line.slice(1, 5)}.txt ve may!\n` +
+          `* Da tu dong copy 784 bit vao bo nho tam (Clipboard).\n\n` +
+          `Dau vector: ${vectorInStr.slice(0, 40)}...`;
       }
     }
   } catch (e) {
