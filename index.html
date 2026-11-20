@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="vi">
 <head>
   <meta charset="utf-8">
@@ -220,10 +220,10 @@
 </head>
 <body>
   <header>
-    <h1><span>âš¡</span> KANELE MNIST FPGA</h1>
+    <h1><span>⚡</span> KANELE MNIST FPGA</h1>
     <div class="subtitle">Standalone BLE & HDMI Hardware Acceleration</div>
     <div class="badge-container">
-      <span id="bleBadge" class="status-badge disconnected">âšª BLE: ChÆ°a káº¿t ná»‘i</span>
+      <span id="bleBadge" class="status-badge disconnected">⚪ BLE: Chưa kết nối</span>
     </div>
   </header>
 
@@ -234,22 +234,22 @@
       </div>
       <div class="preview-box">
         <canvas id="preview" width="28" height="28"></canvas>
-        <div class="preview-label">Chuáº©n 28Ã—28<br>(FPGA Input)</div>
+        <div class="preview-label">Chuẩn 28×28<br>(FPGA Input)</div>
       </div>
     </div>
-    <div id="preprocessInfo" class="preprocess-info">Váº½ má»™t chá»¯ sá»‘ (0 - 9) báº±ng ngÃ³n tay...</div>
+    <div id="preprocessInfo" class="preprocess-info">Vẽ một chữ số (0 - 9) bằng ngón tay...</div>
 
     <div class="button-group">
-      <button id="board" class="btn-ble">ðŸ“¡ Gá»­i FPGA qua Bluetooth (BLE)</button>
-      <button id="verify" class="btn-verify">ðŸ’» Gá»­i vá» PC (TrÃ­ch vector & Kiá»ƒm chá»©ng)</button>
-      <button id="clear" class="btn-clear">ðŸ§¹ XÃ³a nÃ©t váº½</button>
+      <button id="board" class="btn-ble">📡 Gửi FPGA qua Bluetooth (BLE)</button>
+      <button id="verify" class="btn-verify">💻 Gửi về PC (Trích vector & Kiểm chứng)</button>
+      <button id="clear" class="btn-clear">🧹 Xóa nét vẽ</button>
     </div>
 
-    <output id="result" aria-live="polite">Sáºµn sÃ ng. HÃ£y váº½ chá»¯ sá»‘ trÃªn mÃ n hÃ¬nh.</output>
+    <output id="result" aria-live="polite">Sẵn sàng. Hãy vẽ chữ số trên màn hình.</output>
   </div>
 
   <details>
-    <summary>âš™ï¸ CÃ i Ä‘áº·t & Káº¿t ná»‘i BLE / PC Server</summary>
+    <summary>⚙️ Cài đặt & Kết nối BLE / PC Server</summary>
     <div class="settings-body">
       <label>
         Service UUID (Nordic UART Service)
@@ -259,12 +259,12 @@
         Write Characteristic UUID
         <input id="write" value="6e400002-b5a3-f393-e0a9-e50e24dcca9e">
       </label>
-      <button id="connect" class="btn-ble" style="margin-top: 4px;">Káº¿t ná»‘i Boolean Board</button>
+      <button id="connect" class="btn-ble" style="margin-top: 4px;">Kết nối Boolean Board</button>
 
       <hr style="border: 0; border-top: 1px solid var(--border); margin: 6px 0;">
       <label>
-        Äá»‹a chá»‰ PC Server (Äá»ƒ gá»­i trÃ­ch vector kiá»ƒm chá»©ng)
-        <input id="pcUrl" placeholder="VÃ­ dá»¥: http://192.168.1.10:8766 (Äá»ƒ trá»‘ng náº¿u cháº¡y localhost)">
+        Địa chỉ PC Server (Để gửi trích vector kiểm chứng)
+        <input id="pcUrl" placeholder="Ví dụ: http://192.168.1.10:8766 (Để trống nếu chạy localhost)">
       </label>
     </div>
   </details>
@@ -280,7 +280,7 @@
       version++;
       ctx.fillStyle = 'black';
       ctx.fillRect(0, 0, 250, 250);
-      result.textContent = 'ÄÃ£ xÃ³a. HÃ£y váº½ chá»¯ sá»‘ má»›i.';
+      result.textContent = 'Đã xóa. Hãy vẽ chữ số mới.';
       const prevCanvas = document.querySelector('#preview');
       if (prevCanvas) {
         const pctx = prevCanvas.getContext('2d');
@@ -288,7 +288,7 @@
         pctx.fillRect(0, 0, 28, 28);
       }
       const infoEl = document.querySelector('#preprocessInfo');
-      if (infoEl) infoEl.textContent = 'Váº½ má»™t chá»¯ sá»‘ (0 - 9) báº±ng ngÃ³n tay...';
+      if (infoEl) infoEl.textContent = 'Vẽ một chữ số (0 - 9) bằng ngón tay...';
     }
     clearPad();
     document.querySelector('#clear').onclick = clearPad;
@@ -300,7 +300,7 @@
     pad.onpointerdown = e => {
       if (pointer !== null) return;
       version++;
-      result.textContent = 'Äang váº½...';
+      result.textContent = 'Đang vẽ...';
       pointer = e.pointerId;
       pad.setPointerCapture(pointer);
       const [x, y] = point(e);
@@ -449,13 +449,13 @@ function updateBleBadge(connected, name) {
   const btn = el('connect');
   if (!badge) return;
   if (connected) {
-    badge.textContent = 'ðŸŸ¢ BLE: ' + (name || 'ÄÃ£ káº¿t ná»‘i');
+    badge.textContent = '🟢 BLE: ' + (name || 'Đã kết nối');
     badge.className = 'status-badge connected';
-    if (btn) btn.textContent = 'Ngáº¯t káº¿t ná»‘i BLE';
+    if (btn) btn.textContent = 'Ngắt kết nối BLE';
   } else {
-    badge.textContent = 'âšª BLE: ChÆ°a káº¿t ná»‘i';
+    badge.textContent = '⚪ BLE: Chưa kết nối';
     badge.className = 'status-badge disconnected';
-    if (btn) btn.textContent = 'Káº¿t ná»‘i Boolean Board';
+    if (btn) btn.textContent = 'Kết nối Boolean Board';
   }
 }
 
@@ -466,26 +466,26 @@ el('connect').onclick = async () => {
     writer = null;
     gattDevice = null;
     updateBleBadge(false);
-    el('result').textContent = 'ÄÃ£ ngáº¯t káº¿t ná»‘i BLE.';
+    el('result').textContent = 'Đã ngắt kết nối BLE.';
     return;
   }
 
   try {
     if (!navigator.bluetooth) {
-      throw Error('TrÃ¬nh duyá»‡t cáº§n há»— trá»£ Web Bluetooth (Chrome Android qua HTTPS hoáº·c localhost).');
+      throw Error('Trình duyệt cần hỗ trợ Web Bluetooth (Chrome Android qua HTTPS hoặc localhost).');
     }
     const serviceId = (el('service').value.trim() || DEFAULT_SERVICE_UUID).toLowerCase();
     const writeId = (el('write').value.trim() || DEFAULT_WRITE_UUID).toLowerCase();
     localStorage.setItem('kanele_ble_service', serviceId);
     localStorage.setItem('kanele_ble_write', writeId);
 
-    el('result').textContent = 'Äang quÃ©t thiáº¿t bá»‹ Bluetooth...';
+    el('result').textContent = 'Đang quét thiết bị Bluetooth...';
     const device = await navigator.bluetooth.requestDevice({
       acceptAllDevices: true,
       optionalServices: [serviceId]
     });
 
-    el('result').textContent = 'Äang káº¿t ná»‘i tá»›i ' + (device.name || 'kit') + '...';
+    el('result').textContent = 'Đang kết nối tới ' + (device.name || 'kit') + '...';
     gattDevice = device;
     const server = await device.gatt.connect();
     const service = await server.getPrimaryService(serviceId);
@@ -495,14 +495,14 @@ el('connect').onclick = async () => {
       writer = null;
       gattDevice = null;
       updateBleBadge(false);
-      el('result').textContent = 'BLE Ä‘Ã£ ngáº¯t káº¿t ná»‘i.';
+      el('result').textContent = 'BLE đã ngắt kết nối.';
     });
 
     updateBleBadge(true, device.name);
-    el('result').textContent = 'âœ“ ÄÃ£ káº¿t ná»‘i BLE thÃ nh cÃ´ng vá»›i ' + (device.name || 'kit') + '!';
+    el('result').textContent = '✓ Đã kết nối BLE thành công với ' + (device.name || 'kit') + '!';
   } catch (e) {
     updateBleBadge(false);
-    el('result').textContent = 'Lá»—i BLE: ' + e.message;
+    el('result').textContent = 'Lỗi BLE: ' + e.message;
   }
 };
 
@@ -518,7 +518,7 @@ function updatePreview() {
   if (!meta) {
     pctx.fillStyle = '#111';
     pctx.fillRect(0, 0, 28, 28);
-    if (infoEl) infoEl.textContent = 'ChÆ°a cÃ³ nÃ©t váº½.';
+    if (infoEl) infoEl.textContent = 'Chưa có nét vẽ.';
     return null;
   }
 
@@ -533,7 +533,7 @@ function updatePreview() {
   pctx.putImageData(imgData, 0, 0);
 
   if (infoEl) {
-    infoEl.textContent = `BBox: ${meta.bbox.w}Ã—${meta.bbox.h} | CoM: (${meta.com.cx}, ${meta.com.cy}) | Active: ${meta.activeBits}/784 bit (${meta.activePct}%)`;
+    infoEl.textContent = `BBox: ${meta.bbox.w}×${meta.bbox.h} | CoM: (${meta.com.cx}, ${meta.com.cy}) | Active: ${meta.activeBits}/784 bit (${meta.activePct}%)`;
   }
   return meta;
 }
@@ -547,7 +547,7 @@ async function transmit(toBoard) {
   try {
     const meta = updatePreview();
     if (!meta || !meta.packed) {
-      el('result').textContent = 'HÃ£y váº½ má»™t chá»¯ sá»‘ (0 - 9) trÆ°á»›c khi gá»­i.';
+      el('result').textContent = 'Hãy vẽ một chữ số (0 - 9) trước khi gửi.';
       return;
     }
     const payload = meta.packed;
@@ -560,11 +560,11 @@ async function transmit(toBoard) {
     const line = lastLine;
 
     if (toBoard) {
-      // Feature 1: Gá»­i FPGA qua BLE
+      // Feature 1: Gửi FPGA qua BLE
       if (!writer) {
-        throw Error('ChÆ°a káº¿t ná»‘i Bluetooth vá»›i Boolean Board! HÃ£y má»Ÿ má»¥c "CÃ i Ä‘áº·t & Káº¿t ná»‘i BLE" bÃªn dÆ°á»›i Ä‘á»ƒ káº¿t ná»‘i.');
+        throw Error('Chưa kết nối Bluetooth với Boolean Board! Hãy mở mục "Cài đặt & Kết nối BLE" bên dưới để kết nối.');
       }
-      el('result').textContent = 'Äang truyá»n gÃ³i 206 byte sang FPGA qua BLE...';
+      el('result').textContent = 'Đang truyền gói 206 byte sang FPGA qua BLE...';
       const bytes = new TextEncoder().encode(line);
       const totalChunks = Math.ceil(bytes.length / 20);
       for (let i = 0; i < bytes.length; i += 20) {
@@ -575,10 +575,10 @@ async function transmit(toBoard) {
           await writer.writeValueWithoutResponse(chunk);
         }
       }
-      el('result').textContent = `âœ“ ÄÃƒ Gá»¬I FPGA THÃ€NH CÃ”NG! (Seq: ${line.slice(1, 5)})\nâ†’ FPGA Ä‘ang cháº¡y KANELE vÃ  hiá»ƒn thá»‹ chá»¯ sá»‘ lÃªn mÃ n hÃ¬nh HDMI.`;
+      el('result').textContent = `✓ ĐÃ GỬI FPGA THÀNH CÔNG! (Seq: ${line.slice(1, 5)})\n→ FPGA đang chạy KANELE và hiển thị chữ số lên màn hình HDMI.`;
     } else {
-      // Feature 2: Gá»­i vá» PC (Xuáº¥t vector_in & Kiá»ƒm chá»©ng)
-      el('result').textContent = 'Äang gá»­i sang PC Ä‘á»ƒ kiá»ƒm chá»©ng byte-exact vÃ  trÃ­ch vector...';
+      // Feature 2: Gửi về PC (Xuất vector_in & Kiểm chứng)
+      el('result').textContent = 'Đang gửi sang PC để kiểm chứng byte-exact và trích vector...';
       const png = await new Promise(r => pad.toBlob(r));
       const pcBase = (el('pcUrl')?.value?.trim() || '').replace(/\/+$/, '');
       if (el('pcUrl')) localStorage.setItem('kanele_pc_url', pcBase);
@@ -591,16 +591,16 @@ async function transmit(toBoard) {
       });
 
       if (resp.status === 422) {
-        throw Error('Cáº¢NH BÃO: 98 byte tiá»n xá»­ lÃ½ trÃªn Ä‘iá»‡n thoáº¡i khÃ¡c vá»›i káº¿t quáº£ cá»§a PC!');
+        throw Error('CẢNH BÁO: 98 byte tiền xử lý trên điện thoại khác với kết quả của PC!');
       }
       if (!resp.ok) {
-        throw Error(`PC pháº£n há»“i lá»—i HTTP ${resp.status}. Kiá»ƒm tra láº¡i server phone_draw.py trÃªn PC.`);
+        throw Error(`PC phản hồi lỗi HTTP ${resp.status}. Kiểm tra lại server phone_draw.py trên PC.`);
       }
       const replyText = await resp.text();
       el('result').textContent = replyText;
     }
   } catch (e) {
-    el('result').textContent = 'Lá»—i: ' + e.message;
+    el('result').textContent = 'Lỗi: ' + e.message;
   } finally {
     busy = false;
   }
@@ -612,4 +612,3 @@ el('verify').onclick = () => transmit(false);
 </script>
 </body>
 </html>
-
