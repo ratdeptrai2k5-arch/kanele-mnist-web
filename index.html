@@ -262,7 +262,7 @@
   </div>
 
   <details>
-    <summary>Cài đặt & Kết nối BLE / PC Server</summary>
+    <summary>Cài đặt & Kết nối Bluetooth (BLE)</summary>
     <div class="settings-body">
       <label>
         Service UUID (Nordic UART Service)
@@ -273,16 +273,6 @@
         <input id="write" value="6e400002-b5a3-f393-e0a9-e50e24dcca9e">
       </label>
       <button id="connect" class="btn-ble" style="margin-top: 4px;">Kết nối Boolean Board</button>
-
-      <hr style="border: 0; border-top: 1px solid var(--border); margin: 6px 0;">
-      <label>
-        Địa chỉ PC Server (Kết nối trực tiếp HTTP / LAN)
-        <input id="pcUrl" placeholder="Để trống nếu dùng Cloud Relay; hoặc nhập IP PC vd: http://192.168.1.10:8766">
-        <small style="color: var(--text-muted); font-size: 11px; margin-top: 2px;">
-          • <b>Dùng Cloud Sync (GitHub Pages):</b> Để trống ô này và chạy <code>python benchmarks/MNIST/app/sync_vector.py</code> trên PC.<br>
-          • <b>Dùng Wi-Fi LAN:</b> Nhập IP PC (vd: http://192.168.1.15:8766). Không nhập 'localhost' trên điện thoại!
-        </small>
-      </label>
     </div>
   </details>
 
@@ -549,14 +539,13 @@ function crc(bytes) {
 let writer = null, gattDevice = null, sequence = 0, busy = false, lastBody = null, lastLine = null;
 const el = id => document.getElementById(id);
 
-// Load persisted settings
+// Load persisted BLE settings
 const DEFAULT_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
 const DEFAULT_WRITE_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
 
 function initSettings() {
   if (el('service')) el('service').value = safeGet('kanele_ble_service', DEFAULT_SERVICE_UUID);
   if (el('write')) el('write').value = safeGet('kanele_ble_write', DEFAULT_WRITE_UUID);
-  if (el('pcUrl')) el('pcUrl').value = safeGet('kanele_pc_url', '');
 }
 initSettings();
 
@@ -654,7 +643,7 @@ function updatePreview() {
   return meta;
 }
 
-// Nút tải file vector (.txt) độc lập, không làm nhảy trang trên Safari iOS
+// Nút tải file vector (.txt) độc lập, an toàn trên mobile
 el('downloadVec').onclick = () => {
   const meta = updatePreview();
   if (!meta || !meta.packed) {
@@ -677,7 +666,7 @@ el('downloadVec').onclick = () => {
     setTimeout(() => {
       try { document.body.removeChild(a); } catch (_) {}
     }, 150);
-    el('result').textContent = `[OK] Đã tạo file vectors_in_${curSeq}.txt (${meta.activeBits}/784 bit 1)!\nBạn có thể mang file này vào sim_boolean_frame.tcl trên PC.`;
+    el('result').textContent = `[OK] Đã tạo file vectors_in_${curSeq}.txt (${meta.activeBits}/784 bit 1)!\nBạn có thể copy file này vào thư mục sim trên PC.`;
   } catch (e) {
     el('result').textContent = 'Trình duyệt không hỗ trợ tải file trực tiếp. Đã copy vector vào Clipboard!';
   }
@@ -686,8 +675,8 @@ el('downloadVec').onclick = () => {
   }
 };
 
-// Kiểm tra ACK nền từ PC (non-blocking, không làm treo UI)
-async function checkPcAck(curSeq, noticePrefix, activeBits) {
+// Kiểm tra ACK phản hồi từ PC (sync_vector.py) trong nền, không khóa UI
+async function checkPcAck(curSeq, activeBits) {
   let pcAck = null;
   for (let attempt = 0; attempt < 3; attempt++) {
     await new Promise(r => setTimeout(r, 800));
@@ -716,9 +705,9 @@ async function checkPcAck(curSeq, noticePrefix, activeBits) {
 
   if (pcAck) {
     const predText = (pcAck.digit !== undefined && pcAck.digit >= 0)
-      ? `• PyTorch Model dự đoán: Số ${pcAck.digit} (Score: ${pcAck.score})\n`
+      ? `• PyTorch Model trên PC dự đoán: Số ${pcAck.digit} (Score: ${pcAck.score})\n`
       : '';
-    el('result').textContent = noticePrefix +
+    el('result').textContent =
       `[OK] PC ĐÃ NHẬN VÀ LƯU VECTOR THÀNH CÔNG!\n` +
       `• Mã Frame Seq: ${curSeq} (Số bit 1: ${activeBits}/784)\n` +
       predText +
@@ -726,14 +715,14 @@ async function checkPcAck(curSeq, noticePrefix, activeBits) {
       `• Lệnh mô phỏng Vivado trên PC:\n` +
       `  vivado -mode batch -source benchmarks/MNIST/boolean/sim_boolean_frame.tcl`;
   } else {
-    el('result').textContent = noticePrefix +
+    el('result').textContent =
       `[OK] ĐÃ PHÁT GÓI TIN LÊN CLOUD RELAY (Seq: ${curSeq})\n` +
       `• Số bit hoạt động: ${activeBits}/784\n\n` +
       `[LƯU Ý PC]\n` +
       `Chưa thấy script 'sync_vector.py' trên PC phản hồi.\n` +
       `Nếu muốn PC tự động nhận vector và chạy Vivado XSim:\n` +
-      `  1. Mở terminal trên PC\n` +
-      `  2. Chạy: python benchmarks/MNIST/app/sync_vector.py\n` +
+      `  1. Mở terminal trên PC bất kỳ\n` +
+      `  2. Chạy lệnh: python benchmarks/MNIST/app/sync_vector.py\n` +
       `  (Gói tin này vẫn đang chờ trên Cloud, PC bật lên là nhận ngay!).`;
   }
 }
@@ -758,9 +747,9 @@ async function transmit(toBoard) {
     const curSeq = line.slice(1, 5);
 
     if (toBoard) {
-      // 1. GỬI SANG FPGA QUA BLE
+      // 1. GỬI SANG FPGA QUA BLUETOOTH BLE
       if (!writer) {
-        throw Error('Chưa kết nối Bluetooth! Hãy bấm "Cài đặt & Kết nối BLE" để kết nối.');
+        throw Error('Chưa kết nối Bluetooth! Hãy bấm "Cài đặt & Kết nối Bluetooth (BLE)" bên dưới để kết nối.');
       }
       el('result').textContent = 'Đang truyền gói 206 byte sang FPGA qua BLE...';
       const bytes = new TextEncoder().encode(line);
@@ -775,8 +764,8 @@ async function transmit(toBoard) {
       }
       el('result').textContent = `[GỬI BLE THÀNH CÔNG]\n• Đã truyền 206 byte tới radio BLE (Seq: ${curSeq}).\n• Quan sát màn hình HDMI để xem kết quả suy luận.\n(Lưu ý: Mạch FPGA chỉ có UART RX; nếu màn hình vẫn giữ số cũ hoặc dấu -, hãy kiểm tra BLE UART 115200 hoặc bấm RESET trên kit).`;
     } else {
-      // 2. GỬI VỀ PC / CLOUD RELAY
-      el('result').textContent = 'Đang trích xuất vector_in...';
+      // 2. GỬI VỀ PC QUA CLOUD RELAY TỰ ĐỘNG
+      el('result').textContent = `Đang phát gói tin lên Cloud Relay (Seq: ${curSeq})...`;
 
       const bits = [];
       for (const b of payload) {
@@ -786,48 +775,6 @@ async function transmit(toBoard) {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(bits.join(' ')).catch(() => {});
       }
-
-      const pcBase = (el('pcUrl')?.value?.trim() || '').replace(/\/+$/, '');
-      if (el('pcUrl')) safeSet('kanele_pc_url', pcBase);
-
-      const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
-      const isLocalhost = /localhost|127\.0\.0\.1/i.test(pcBase);
-      const isHttpsPage = window.location.protocol === 'https:';
-      const isHttpTarget = pcBase.startsWith('http://');
-
-      // Nếu nhập PC URL hợp lệ và không vướng mixed-content thì thử direct fetch
-      if (pcBase && !(isMobile && isLocalhost) && !(isHttpsPage && isHttpTarget)) {
-        el('result').textContent = `Đang kết nối trực tiếp tới PC (${pcBase})...`;
-        try {
-          const png = await new Promise(r => pad.toBlob(r));
-          const controller = new AbortController();
-          const timer = setTimeout(() => controller.abort(), 3500);
-          const resp = await fetch(pcBase + '/verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/octet-stream' },
-            body: new Blob([line, png]),
-            signal: controller.signal
-          });
-          clearTimeout(timer);
-          if (resp.ok) {
-            const txt = await resp.text();
-            el('result').textContent = `[OK] ĐÃ LƯU TRỰC TIẾP VÀO PC THÀNH CÔNG!\n\n${txt}`;
-            return;
-          }
-        } catch (e) {
-          console.warn('Direct PC fetch failed, falling back to Cloud Relay:', e);
-        }
-      }
-
-      // Thông báo ghi chú nếu rơi vào trường hợp đặc biệt nhưng VẪN GỬI CLOUD CHỨ KHÔNG CHẶN
-      let noticePrefix = '';
-      if (pcBase && isHttpsPage && isHttpTarget) {
-        noticePrefix = `(Lưu ý: Trang đang mở qua HTTPS nên trình duyệt chặn kết nối trực tiếp tới HTTP LAN. Tự động chuyển qua Cloud Sync)\n\n`;
-      } else if (pcBase && isMobile && isLocalhost) {
-        noticePrefix = `(Lưu ý: 'localhost' trên điện thoại là chính điện thoại, không phải PC. Tự động chuyển qua Cloud Sync)\n\n`;
-      }
-
-      el('result').textContent = noticePrefix + `Đang phát gói tin lên Cloud Relay (Seq: ${curSeq})...`;
 
       let cloudSent = false;
       let cloudError = null;
@@ -848,14 +795,14 @@ async function transmit(toBoard) {
         return;
       }
 
-      el('result').textContent = noticePrefix +
+      el('result').textContent =
         `[OK] ĐÃ PHÁT GÓI TIN LÊN CLOUD RELAY!\n` +
         `• Mã Frame Seq: ${curSeq} (Số bit 1: ${meta.activeBits}/784)\n` +
-        `• Đã chuyển tiếp dữ liệu vector lên Cloud an toàn.\n` +
+        `• Dữ liệu vector đã chuyển tiếp lên Cloud an toàn.\n` +
         `• Đang kiểm tra phản hồi từ PC (sync_vector.py)...`;
 
-      // Kiểm tra ACK từ PC ở chế độ nền (không khóa UI)
-      checkPcAck(curSeq, noticePrefix, meta.activeBits);
+      // Kiểm tra ACK từ PC ở chế độ nền (không khóa giao diện)
+      checkPcAck(curSeq, meta.activeBits);
     }
   } catch (e) {
     el('result').textContent = 'Lỗi: ' + e.message;
