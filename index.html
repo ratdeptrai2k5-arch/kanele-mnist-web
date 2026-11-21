@@ -764,8 +764,8 @@ async function transmit(toBoard) {
       }
       el('result').textContent = `[GỬI BLE THÀNH CÔNG]\n• Đã truyền 206 byte tới radio BLE (Seq: ${curSeq}).\n• Quan sát màn hình HDMI để xem kết quả suy luận.\n(Lưu ý: Mạch FPGA chỉ có UART RX; nếu màn hình vẫn giữ số cũ hoặc dấu -, hãy kiểm tra BLE UART 115200 hoặc bấm RESET trên kit).`;
     } else {
-      // 2. GỬI VỀ PC QUA CLOUD RELAY TỰ ĐỘNG
-      el('result').textContent = `Đang phát gói tin lên Cloud Relay (Seq: ${curSeq})...`;
+      // 2. GỬI VỀ PC (ƯU TIÊN LAN PC SERVER TRỰC TIẾP, FALLBACK CLOUD RELAY NẾU MỞ TỪ GITHUB PAGES HOẶC LỖI)
+      el('result').textContent = `Đang kết nối gửi dữ liệu về PC (Seq: ${curSeq})...`;
 
       const bits = [];
       for (const b of payload) {
@@ -776,6 +776,27 @@ async function transmit(toBoard) {
         navigator.clipboard.writeText(bits.join(' ')).catch(() => {});
       }
 
+      // Kiểm tra nếu web được mở từ server LAN/localhost (ví dụ phone_draw.py port 8766 hoặc qua adb)
+      const isLocalServer = location.protocol.startsWith('http') && !location.hostname.endsWith('github.io');
+      if (isLocalServer) {
+        try {
+          el('result').textContent = `Đang gửi trực tiếp về server LAN PC qua /vectors (Seq: ${curSeq})...`;
+          const lanResp = await fetch('/vectors', {
+            method: 'POST',
+            body: line
+          });
+          if (lanResp.ok) {
+            const lanText = await lanResp.text();
+            el('result').textContent = lanText;
+            return;
+          }
+        } catch (lanErr) {
+          console.warn('LAN /vectors không phản hồi, tự động fallback sang Cloud Relay:', lanErr);
+        }
+      }
+
+      // Fallback: Gửi qua Cloud Relay (ntfy.sh)
+      el('result').textContent = `Đang phát gói tin lên Cloud Relay (Seq: ${curSeq})...`;
       let cloudSent = false;
       let cloudError = null;
       try {
@@ -791,7 +812,7 @@ async function transmit(toBoard) {
       }
 
       if (!cloudSent) {
-        el('result').textContent = `[LỖI GỬI DỮ LIỆU]\nKhông thể gửi lên Cloud Relay: ${cloudError}\n• Kiểm tra kết nối Internet (Wi-Fi/4G) của điện thoại.\n• Bạn có thể bấm nút "Tải file vector (.txt)" để lưu thủ công.`;
+        el('result').textContent = `[LỖI GỬI DỮ LIỆU]\nKhông thể gửi qua LAN hoặc Cloud Relay: ${cloudError}\n• Kiểm tra server phone_draw.py hoặc kết nối Internet của điện thoại.\n• Bạn có thể bấm nút "Tải file vector (.txt)" để lưu thủ công.`;
         return;
       }
 
