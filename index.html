@@ -257,8 +257,12 @@
 
       <hr style="border: 0; border-top: 1px solid var(--border); margin: 6px 0;">
       <label>
-        Dia chi PC Server (Gui trich vector kiem chung)
-        <input id="pcUrl" placeholder="Vi du: http://192.168.1.10:8766 (De trong neu dung localhost)">
+        Dia chi PC Server (Ket noi truc tiep HTTP / LAN)
+        <input id="pcUrl" placeholder="De trong neu dung Cloud Relay; hoac nhap IP PC vd: http://192.168.1.10:8766">
+        <small style="color: var(--text-muted); font-size: 11px; margin-top: 2px;">
+          • <b>Dung Cloud Sync (GitHub Pages):</b> De trong o nay va chay <code>python sync_vector.py</code> tren PC.<br>
+          • <b>Dung Wi-Fi LAN:</b> Nhap IP PC (vd: http://192.168.1.15:8766). Khong nhap 'localhost' tren dien thoai!
+        </small>
       </label>
     </div>
   </details>
@@ -579,7 +583,7 @@ async function transmit(toBoard) {
       }
       el('result').textContent = `[GUI BLE XONG] Da truyen 206 byte toi radio BLE (Seq: ${line.slice(1, 5)}).\nQuan sat man hinh HDMI de xem ket qua suy luan.\n(Luu y: Top FPGA chi co UART RX; neu man hinh van giu nguyen so cu hoac dau -, kiem tra BLE/UART 115200 hoac bam Reset tren kit).`;
     } else {
-      // Feature 2: Xuất vector_in trực tiếp & Tải về máy
+      // Feature 2: Xuất vector_in trực tiếp & Gửi về PC
       el('result').textContent = 'Dang trich xuat vector_in...';
 
       // 1. Chuyển đổi thành 784 bit nhị phân
@@ -588,13 +592,14 @@ async function transmit(toBoard) {
         for (let i = 7; i >= 0; i--) bits.push((b >> i) & 1);
       }
       const vectorInStr = bits.join(' ');
+      const curSeq = line.slice(1, 5);
 
-      // 2. Tự động tải file vectors_in.txt về máy điện thoại/máy tính
+      // 2. Tự động tải file vectors_in.txt về máy điện thoại/máy tính (dự phòng offline)
       try {
         const blob = new Blob([vectorInStr + '\n'], { type: 'text/plain' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `vectors_in_${line.slice(1, 5)}.txt`;
+        a.download = `vectors_in_${curSeq}.txt`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -602,36 +607,89 @@ async function transmit(toBoard) {
         console.warn('File auto-download not supported on this browser');
       }
 
-      // 3. Sao chép 784 bit vào clipboard (để paste nếu cần)
+      // 3. Sao chép 784 bit vào clipboard
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(vectorInStr).catch(() => {});
       }
 
       // 4. Đồng bộ sang PC
-      let pcResponseText = null;
-      let cloudSynced = false;
       const pcBase = (el('pcUrl')?.value?.trim() || '').replace(/\/+$/, '');
       if (el('pcUrl')) localStorage.setItem('kanele_pc_url', pcBase);
 
-      // A. Nếu có pcBase HTTPS hoặc mở qua HTTP nội bộ
-      if (pcBase.startsWith('https://') || (window.location.protocol === 'http:' && !pcBase) || (pcBase && window.location.protocol === 'http:')) {
+      // NHÁNH A: Người dùng chủ động nhập URL PC Server (Direct HTTP LAN)
+      if (pcBase) {
+        const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+        const isLocalhost = /localhost|127\.0\.0\.1/i.test(pcBase);
+        const isHttpsPage = window.location.protocol === 'https:';
+        const isHttpTarget = pcBase.startsWith('http://');
+
+        if (isMobile && isLocalhost) {
+          el('result').textContent = `[LOI CAU HINH PC SERVER]\nBan dang mo app tren dien thoai nhung lai nhap 'localhost' (${pcBase}).\n\n` +
+            `• Tren dien thoai, 'localhost' la ban than dien thoai, KHONG PHAI may tinh PC!\n` +
+            `• Cach 1: Nhap IP mang LAN cua PC (vi du: http://192.168.1.15:8766)\n` +
+            `• Cach 2: Xoa trang o nay (de trong) va dung Cloud Sync (chay 'python sync_vector.py' tren PC)\n` +
+            `• Cach 3: Cam cap USB noi dien thoai voi PC, chay tren PC: adb reverse tcp:8766 tcp:8766\n\n` +
+            `(Da tai file vectors_in_${curSeq}.txt ve dien thoai de du phong).`;
+          return;
+        }
+
+        if (isHttpsPage && isHttpTarget) {
+          el('result').textContent = `[LOI CHAN MIXED CONTENT TRINH DUYET]\nTrang web dang chay tren HTTPS (GitHub Pages) nen trinh duyet chan ket noi truc tiep toi HTTP noi bo (${pcBase}).\n\n` +
+            `• Giai phap khuyen dung: Xoa trang o PC Server (de trong), sau do tren PC chay lenh:\n` +
+            `  python benchmarks/MNIST/app/sync_vector.py\n` +
+            `• Hoac neu muon dung truc tiep: Mo app qua HTTP mang LAN tren PC:\n` +
+            `  python benchmarks/MNIST/app/phone_draw.py --port 8766\n` +
+            `  (Sau do tren dien thoai truy cap http://<IP_PC>:8766)\n\n` +
+            `(Da tai file vectors_in_${curSeq}.txt ve dien thoai de du phong).`;
+          return;
+        }
+
+        el('result').textContent = `Dang ket noi truc tiep toi PC Server: ${pcBase}...`;
+        let pcResponseText = null;
+        let directError = null;
+
         try {
           const png = await new Promise(r => pad.toBlob(r));
-          const verifyUrl = (pcBase || '') + '/verify';
+          const verifyUrl = pcBase + '/verify';
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 4000);
           const resp = await fetch(verifyUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/octet-stream' },
-            body: new Blob([line, png])
+            body: new Blob([line, png]),
+            signal: controller.signal
           });
+          clearTimeout(timeoutId);
           if (resp.ok) {
             pcResponseText = await resp.text();
+          } else {
+            directError = `PC Server tra ve ma loi HTTP ${resp.status} (${resp.statusText}).`;
           }
         } catch (e) {
-          // Bỏ qua lỗi direct fetch
+          directError = `Khong the ket noi toi PC Server tai: ${pcBase}\nChi tiet: ${e.message}\n\n` +
+            `• Kiem tra: Tren PC da chay lenh 'python benchmarks/MNIST/app/phone_draw.py' chua?\n` +
+            `• Kiem tra: Dien thoai va PC co dang ket noi chung mot mang Wi-Fi khong?\n` +
+            `• Kiem tra: Tuong lua Windows Firewall tren PC co dang chan port khong?`;
+        }
+
+        if (directError) {
+          el('result').textContent = `[THAT BAI KET NOI PC]\n${directError}\n\n(Da tai file vectors_in_${curSeq}.txt ve may de du phong).`;
+          return;
+        }
+
+        if (pcResponseText) {
+          el('result').textContent = `[OK] DA LUU VAO PC THANH CONG!\n\n` +
+            pcResponseText +
+            `\n\n(Da tai file vectors_in_${curSeq}.txt ve may)`;
+          return;
         }
       }
 
-      // B. Đồng bộ tự động qua Cloud Relay HTTPS (cho GitHub Pages)
+      // NHÁNH B: Người dùng để trống ô PC Server -> Sử dụng Cloud Relay (kanele_vector_sync)
+      el('result').textContent = `Dang phat goi tin len Cloud Relay (Seq: ${curSeq})...`;
+      let cloudSent = false;
+      let cloudError = null;
+
       try {
         const cloudResp = await fetch('https://ntfy.sh/kanele_vector_sync', {
           method: 'POST',
@@ -639,34 +697,75 @@ async function transmit(toBoard) {
           body: JSON.stringify({
             line: line,
             bits: bits,
-            seq: line.slice(1, 5)
+            seq: curSeq
           })
         });
-        if (cloudResp.ok) cloudSynced = true;
+        if (cloudResp.ok) cloudSent = true;
+        else cloudError = `Cloud Relay tra ve ma HTTP ${cloudResp.status}`;
       } catch (err) {
-        console.warn('Cloud sync error:', err);
+        cloudError = err.message;
       }
 
-      // 5. Hiển thị thông báo kết quả
-      if (pcResponseText) {
-        el('result').textContent = `[OK] DA GUI VE PC VA LUU CUSTOM THANH CONG!\n\n` +
-          pcResponseText +
-          `\n\n(Da tai file vectors_in_${line.slice(1, 5)}.txt ve may)`;
-      } else if (cloudSynced) {
-        el('result').textContent = `[OK] DA TRICH XUAT VA DONG BO VE PC THANH CONG!\n` +
-          `* Ma Frame: ${line.slice(0, 10)}... (206 byte)\n` +
-          `* So bit 1: ${meta.activeBits}/784 bit (${meta.activePct}%)\n` +
-          `* Da dong bo qua Cloud -> PC (sync_vector.py) tu dong luu vao:\n` +
+      if (!cloudSent) {
+        el('result').textContent = `[LOI GUI CLOUD RELAY]\nKhong the gui du lieu len Cloud: ${cloudError}\n` +
+          `• Kiem tra ket noi Internet (Wi-Fi/4G) cua dien thoai.\n` +
+          `• (Da tai file vectors_in_${curSeq}.txt ve may de du phong).`;
+        return;
+      }
+
+      // Đã gửi lên Cloud Relay xong. Thăm dò (poll) ACK phản hồi thực sự từ PC trong vòng 3 giây
+      el('result').textContent = `Da phat len Cloud (Seq: ${curSeq}). Dang cho xac nhan tu PC (sync_vector.py)...`;
+      let pcAck = null;
+
+      for (let attempt = 0; attempt < 4; attempt++) {
+        await new Promise(r => setTimeout(r, 700));
+        try {
+          const ackResp = await fetch('https://ntfy.sh/kanele_vector_ack/json?poll=1&since=10s', {
+            cache: 'no-store'
+          });
+          if (ackResp.ok) {
+            const text = await ackResp.text();
+            const lines = text.trim().split('\n');
+            for (const lineStr of lines) {
+              if (!lineStr) continue;
+              try {
+                const msgObj = JSON.parse(lineStr);
+                if (msgObj.message) {
+                  const ackData = JSON.parse(msgObj.message);
+                  if (ackData.seq === curSeq) {
+                    pcAck = ackData;
+                    break;
+                  }
+                }
+              } catch (parseErr) {}
+            }
+          }
+        } catch (pollErr) {
+          console.warn('Poll ACK error:', pollErr);
+        }
+        if (pcAck) break;
+      }
+
+      if (pcAck) {
+        const predText = (pcAck.digit !== undefined && pcAck.digit >= 0)
+          ? `* PyTorch Model tren PC du doan: So ${pcAck.digit} (Score: ${pcAck.score})\n`
+          : '';
+        el('result').textContent = `[OK] XAC NHAN TU PC: DA LUU VECTOR THANH CONG!\n` +
+          `* Ma Frame Seq: ${curSeq} (So bit 1: ${meta.activeBits}/784)\n` +
+          predText +
+          `* PC (sync_vector.py) DA XAC NHAN ghi de vao:\n` +
           `  firmware/sim/custom/vectors_in.txt\n\n` +
-          `* Da tai file: vectors_in_${line.slice(1, 5)}.txt ve may!\n` +
-          `* Da tu dong copy 784 bit vao bo nho tam (Clipboard).`;
+          `* Lenh mo phong Vivado tren PC:\n` +
+          `  vivado -mode batch -source benchmarks/MNIST/boolean/sim_boolean_frame.tcl\n\n` +
+          `* Da tai file: vectors_in_${curSeq}.txt ve may!`;
       } else {
-        el('result').textContent = `[OK] TRICH XUAT VECTOR_IN THANH CONG!\n` +
-          `* Ma Frame: ${line.slice(0, 10)}... (206 byte)\n` +
-          `* So bit 1: ${meta.activeBits}/784 bit (${meta.activePct}%)\n` +
-          `* Da tai file: vectors_in_${line.slice(1, 5)}.txt ve may!\n` +
-          `* Da tu dong copy 784 bit vao bo nho tam (Clipboard).\n\n` +
-          `Dau vector: ${vectorInStr.slice(0, 40)}...`;
+        el('result').textContent = `[CANH BAO] CHUA NHAN DUOC PHAN HOI TU PC!\n` +
+          `Goi tin da phat len Cloud Relay (Seq: ${curSeq}), NHUNG PC CHUA PHAN HOI XAC NHAN.\n\n` +
+          `• Nguyen nhan: May tinh PC chua bat hoac chua chay lenh sau tren terminal:\n` +
+          `  python benchmarks/MNIST/app/sync_vector.py\n\n` +
+          `• Luu y: File 'vectors_in.txt' tren PC CHUA DUOC CAP NHAT!\n` +
+          `  Hay kiem tra terminal PC chay sync_vector.py roi bam gui lai.\n` +
+          `  (Da tu dong tai file vectors_in_${curSeq}.txt ve may de du phong).`;
       }
     }
   } catch (e) {
