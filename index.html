@@ -88,6 +88,8 @@
       border-radius: 10px;
       touch-action: none;
       cursor: crosshair;
+      user-select: none;
+      -webkit-user-select: none;
     }
     .preview-box {
       display: flex;
@@ -135,6 +137,7 @@
       align-items: center;
       justify-content: center;
       transition: all 0.15s ease;
+      touch-action: manipulation;
     }
     button:active {
       transform: scale(0.98);
@@ -149,6 +152,19 @@
       color: #fff;
     }
     button.btn-verify:hover { background: var(--success-hover); }
+    .btn-row {
+      display: flex;
+      gap: 8px;
+    }
+    .btn-row button {
+      flex: 1;
+    }
+    button.btn-download {
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+    button.btn-download:hover { background: rgba(56, 189, 248, 0.25); }
     button.btn-clear {
       background: rgba(148, 163, 184, 0.2);
       color: var(--text);
@@ -217,7 +233,7 @@
     <h1>KANELE MNIST FPGA</h1>
     <div class="subtitle">Standalone BLE & HDMI Hardware Acceleration</div>
     <div class="badge-container">
-      <span id="bleBadge" class="status-badge disconnected">[BLE] Chua ket noi</span>
+      <span id="bleBadge" class="status-badge disconnected">[BLE] Chưa kết nối</span>
     </div>
   </header>
 
@@ -228,22 +244,25 @@
       </div>
       <div class="preview-box">
         <canvas id="preview" width="28" height="28"></canvas>
-        <div class="preview-label">Chuan 28x28<br>(FPGA Input)</div>
+        <div class="preview-label">Chuẩn 28x28<br>(FPGA Input)</div>
       </div>
     </div>
-    <div id="preprocessInfo" class="preprocess-info">Ve mot chu so (0 - 9) bang ngon tay...</div>
+    <div id="preprocessInfo" class="preprocess-info">Vẽ một chữ số (0 - 9) bằng ngón tay...</div>
 
     <div class="button-group">
-      <button id="board" class="btn-ble">Gui FPGA qua Bluetooth (BLE)</button>
-      <button id="verify" class="btn-verify">Gui ve PC (Trich vector & Kiem chung)</button>
-      <button id="clear" class="btn-clear">Xoa net ve</button>
+      <button id="board" class="btn-ble">Gửi FPGA qua Bluetooth (BLE)</button>
+      <button id="verify" class="btn-verify">Gửi về PC (Trích vector & Kiểm chứng)</button>
+      <div class="btn-row">
+        <button id="downloadVec" class="btn-download">Tải file vector (.txt)</button>
+        <button id="clear" class="btn-clear">Xóa nét vẽ</button>
+      </div>
     </div>
 
-    <output id="result" aria-live="polite">San sang. Hay ve chu so tren man hinh.</output>
+    <output id="result" aria-live="polite">Sẵn sàng. Hãy vẽ chữ số trên màn hình.</output>
   </div>
 
   <details>
-    <summary>Cai dat & Ket noi BLE / PC Server</summary>
+    <summary>Cài đặt & Kết nối BLE / PC Server</summary>
     <div class="settings-body">
       <label>
         Service UUID (Nordic UART Service)
@@ -253,64 +272,67 @@
         Write Characteristic UUID
         <input id="write" value="6e400002-b5a3-f393-e0a9-e50e24dcca9e">
       </label>
-      <button id="connect" class="btn-ble" style="margin-top: 4px;">Ket noi Boolean Board</button>
+      <button id="connect" class="btn-ble" style="margin-top: 4px;">Kết nối Boolean Board</button>
 
       <hr style="border: 0; border-top: 1px solid var(--border); margin: 6px 0;">
       <label>
-        Dia chi PC Server (Ket noi truc tiep HTTP / LAN)
-        <input id="pcUrl" placeholder="De trong neu dung Cloud Relay; hoac nhap IP PC vd: http://192.168.1.10:8766">
+        Địa chỉ PC Server (Kết nối trực tiếp HTTP / LAN)
+        <input id="pcUrl" placeholder="Để trống nếu dùng Cloud Relay; hoặc nhập IP PC vd: http://192.168.1.10:8766">
         <small style="color: var(--text-muted); font-size: 11px; margin-top: 2px;">
-          • <b>Dung Cloud Sync (GitHub Pages):</b> De trong o nay va chay <code>python sync_vector.py</code> tren PC.<br>
-          • <b>Dung Wi-Fi LAN:</b> Nhap IP PC (vd: http://192.168.1.15:8766). Khong nhap 'localhost' tren dien thoai!
+          • <b>Dùng Cloud Sync (GitHub Pages):</b> Để trống ô này và chạy <code>python benchmarks/MNIST/app/sync_vector.py</code> trên PC.<br>
+          • <b>Dùng Wi-Fi LAN:</b> Nhập IP PC (vd: http://192.168.1.15:8766). Không nhập 'localhost' trên điện thoại!
         </small>
       </label>
     </div>
   </details>
 
   <script>
-    // Tu dong xoa cache cu de tranh bi luu ban loi font truoc do
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function(regs) {
-        for (var reg of regs) reg.unregister();
-      });
-    }
-    if ('caches' in window) {
-      caches.keys().then(function(keys) {
-        for (var k of keys) caches.delete(k);
-      });
-    }
-
-    const pad = document.querySelector('#pad'), ctx = pad.getContext('2d'), result = document.querySelector('#result');
-    let pointer = null, version = 0;
-
-    function clearPad() {
-      version++;
-      ctx.fillStyle = 'black';
-      ctx.fillRect(0, 0, 250, 250);
-      result.textContent = 'Da xoa. Hay ve chu so moi.';
-      const prevCanvas = document.querySelector('#preview');
-      if (prevCanvas) {
-        const pctx = prevCanvas.getContext('2d');
-        pctx.fillStyle = '#000';
-        pctx.fillRect(0, 0, 28, 28);
+    // An toàn xóa cache / service worker cũ nếu có
+    try {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(regs => {
+          for (const reg of regs) reg.unregister().catch(() => {});
+        }).catch(() => {});
       }
-      const infoEl = document.querySelector('#preprocessInfo');
-      if (infoEl) infoEl.textContent = 'Ve mot chu so (0 - 9) bang ngon tay...';
-    }
-    clearPad();
-    document.querySelector('#clear').onclick = clearPad;
+      if ('caches' in window) {
+        caches.keys().then(keys => {
+          for (const k of keys) caches.delete(k).catch(() => {});
+        }).catch(() => {});
+      }
+    } catch (_) {}
 
-    function point(e) {
-      const r = pad.getBoundingClientRect();
-      return [(e.clientX - r.left) * 250 / r.width, (e.clientY - r.top) * 250 / r.height];
+    // Hàm truy xuất Storage an toàn chống ném ngoại lệ trên iOS Private Mode
+    function safeGet(key, def) {
+      try {
+        const v = localStorage.getItem(key);
+        return v !== null ? v : def;
+      } catch (_) {
+        return def;
+      }
     }
-    pad.onpointerdown = e => {
-      if (pointer !== null) return;
-      version++;
-      result.textContent = 'Dang ve...';
-      pointer = e.pointerId;
-      pad.setPointerCapture(pointer);
-      const [x, y] = point(e);
+    function safeSet(key, val) {
+      try {
+        localStorage.setItem(key, val);
+      } catch (_) {}
+    }
+
+    const pad = document.getElementById('pad');
+    const ctx = pad.getContext('2d');
+    const result = document.getElementById('result');
+    let isDrawing = false;
+    let activePointerId = null;
+
+    function getCanvasCoords(clientX, clientY) {
+      const rect = pad.getBoundingClientRect();
+      return [
+        (clientX - rect.left) * (250 / rect.width),
+        (clientY - rect.top) * (250 / rect.height)
+      ];
+    }
+
+    function startStroke(x, y) {
+      isDrawing = true;
+      result.textContent = 'Đang vẽ nét...';
       ctx.fillStyle = 'white';
       ctx.beginPath();
       ctx.arc(x, y, 9, 0, 2 * Math.PI);
@@ -319,19 +341,108 @@
       ctx.moveTo(x, y);
       ctx.strokeStyle = 'white';
       ctx.lineWidth = 18;
-      ctx.lineCap = ctx.lineJoin = 'round';
-    };
-    pad.onpointermove = e => {
-      if (pointer === e.pointerId) {
-        ctx.lineTo(...point(e));
-        ctx.stroke();
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+    }
+
+    function moveStroke(x, y) {
+      if (!isDrawing) return;
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    }
+
+    function endStroke() {
+      if (isDrawing) {
+        isDrawing = false;
+        activePointerId = null;
+        ctx.closePath();
+        setTimeout(updatePreview, 30);
       }
-    };
-    pad.onlostpointercapture = e => {
-      if (pointer === e.pointerId) pointer = null;
-    };
+    }
+
+    // 1. Pointer Events (Hiện đại, đa nền tảng)
+    pad.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      activePointerId = e.pointerId;
+      try { pad.setPointerCapture(e.pointerId); } catch (_) {}
+      const [x, y] = getCanvasCoords(e.clientX, e.clientY);
+      startStroke(x, y);
+    });
+
+    pad.addEventListener('pointermove', e => {
+      if (!isDrawing) return;
+      if (activePointerId !== null && e.pointerId !== activePointerId) return;
+      e.preventDefault();
+      const [x, y] = getCanvasCoords(e.clientX, e.clientY);
+      moveStroke(x, y);
+    });
+
+    pad.addEventListener('pointerup', e => {
+      e.preventDefault();
+      try { pad.releasePointerCapture(e.pointerId); } catch (_) {}
+      endStroke();
+    });
+
+    pad.addEventListener('pointercancel', e => {
+      try { pad.releasePointerCapture(e.pointerId); } catch (_) {}
+      endStroke();
+    });
+
+    pad.addEventListener('lostpointercapture', () => endStroke());
+
+    // Đảm bảo không bị kẹt nét vẽ khi nhấc tay ngoài canvas
+    window.addEventListener('pointerup', () => { if (isDrawing) endStroke(); });
+    window.addEventListener('pointercancel', () => { if (isDrawing) endStroke(); });
+    window.addEventListener('mouseup', () => { if (isDrawing) endStroke(); });
+    window.addEventListener('touchend', () => { if (isDrawing) endStroke(); });
+
+    // 2. Touch Fallback (Đặc trị cho iOS Safari và WebView không kích hoạt PointerEvent)
+    pad.addEventListener('touchstart', e => {
+      if (e.touches && e.touches.length > 0) {
+        e.preventDefault();
+        const touch = e.touches[0];
+        const [x, y] = getCanvasCoords(touch.clientX, touch.clientY);
+        startStroke(x, y);
+      }
+    }, { passive: false });
+
+    pad.addEventListener('touchmove', e => {
+      if (!isDrawing) return;
+      if (e.touches && e.touches.length > 0) {
+        e.preventDefault();
+        const touch = e.touches[0];
+        const [x, y] = getCanvasCoords(touch.clientX, touch.clientY);
+        moveStroke(x, y);
+      }
+    }, { passive: false });
+
+    pad.addEventListener('touchend', e => {
+      e.preventDefault();
+      endStroke();
+    }, { passive: false });
+
+    pad.addEventListener('touchcancel', () => endStroke());
+
+    function clearPad() {
+      isDrawing = false;
+      activePointerId = null;
+      ctx.fillStyle = 'black';
+      ctx.fillRect(0, 0, 250, 250);
+      result.textContent = 'Đã xóa. Hãy vẽ chữ số mới.';
+      const prevCanvas = document.getElementById('preview');
+      if (prevCanvas) {
+        const pctx = prevCanvas.getContext('2d');
+        pctx.fillStyle = '#000';
+        pctx.fillRect(0, 0, 28, 28);
+      }
+      const infoEl = document.getElementById('preprocessInfo');
+      if (infoEl) infoEl.textContent = 'Vẽ một chữ số (0 - 9) bằng ngón tay...';
+    }
+    clearPad();
+    document.getElementById('clear').onclick = clearPad;
 
     const thresholds = [[0,null],[1,null],[0,null],[0,null],[1,null],[1,null],[0,null],[0,null],[0,null],[0,null],[0,null],[0,null],[1,null],[0,null],[0,null],[0,null],[0,null],[0,null],[0,null],[0,null],[1,null],[1,null],[0,null],[1,null],[1,null],[0,null],[1,null],[1,null],[1,null],[0,null],[0,null],[0,null],[1,null],[1,null],[0,null],[0,0.7717708945274353],[0,0.6880613565444946],[1,null],[1,null],[0,2.77097749710083],[0,0.6620023846626282],[1,null],[1,null],[0,2.8834400177001953],[0,null],[1,null],[0,0.45805594325065613],[0,1.0428142547607422],[0,0.011002310551702976],[1,null],[0,null],[0,null],[1,null],[1,null],[1,null],[0,null],[0,null],[0,null],[0,null],[0,null],[1,null],[0,0.05059618875384331],[0,0.07534046471118927],[0,0.04332337900996208],[0,0.7487328052520752],[0,1.988650918006897],[1,null],[0,0.551793098449707],[0,3.1835062503814697],[0,1.392167568206787],[0,3.9261558055877686],[0,5.798349857330322],[0,2.015259027481079],[0,3.120042085647583],[0,3.9805915355682373],[0,1.466007947921753],[1,null],[0,0.9531542062759399],[0,0.264175146818161],[0,0.3222094178199768],[0,null],[0,null],[0,null],[0,null],[0,null],[0,null],[0,null],[0,null],[1,null],[1,null],[1,null],[0,0.6295521259307861],[0,0.6918726563453674],[0,10.904133796691895],[1,null],[1,null],[0,9.733652114868164],[1,null],[0,8.107460975646973],[0,20.992107391357422],[0,9.972129821777344],[0,10.401864051818848],[0,6.340783596038818],[0,9.45079517364502],[1,null],[0,1.3994135856628418],[1,null],[0,0.005283616483211517],[1,null],[0,0.0036003070417791605],[0,null],[0,null],[0,null],[0,null],[0,0.07821311056613922],[1,null],[0,0.4616771340370178],[0,4.175837993621826],[1,null],[1,null],[0,8.493013381958008],[0,11.773099899291992],[0,8.356145858764648],[0,111.42709350585938],[0,113.47081756591797],[0,73.76480865478516],[0,66.47456359863281],[0,54.217315673828125],[0,13.316235542297363],[0,30.02835464477539],[0,21.58708381652832],[0,9.593818664550781],[0,9.923314094543457],[1,null],[1,null],[0,2.7556703090667725],[0,0.436594694852829],[1,null],[0,0.244047611951828],[0,null],[0,null],[0,null],[0,0.01799393631517887],[1,null],[1,null],[1,null],[1,null],[1,null],[0,20.918272018432617],[0,37.185951232910156],[0,58.15669631958008],[0,70.28250122070312],[0,54.0042724609375],[0,50.76655197143555],[0,45.10529327392578],[0,69.424560546875],[0,77.51596069335938],[0,63.14951705932617],[0,52.186561584472656],[0,86.42774963378906],[0,19.932174682617188],[0,52.04755401611328],[0,21.3353271484375],[1,null],[0,2.964780807495117],[0,0.7564197182655334],[0,0.017773548141121864],[0,null],[0,null],[0,null],[1,null],[0,0.26514407992362976],[0,1.3354326486587524],[1,null],[1,null],[0,4.8025383949279785],[0,58.6840934753418],[0,72.86422729492188],[0,64.90704345703125],[0,57.03350067138672],[0,73.54582977294922],[0,154.95005798339844],[0,136.57015991210938],[0,129.95143127441406],[0,145.08966064453125],[0,103.41248321533203],[0,103.60330963134766],[0,80.16809844970703],[0,65.89483642578125],[0,31.793790817260742],[0,37.80325698852539],[0,7.7483344078063965],[0,4.341702938079834],[1,null],[0,0.12723428010940552],[0,null],[0,null],[1,null],[1,null],[1,null],[0,1.8959871530532837],[0,4.393919944763184],[0,16.19162940979004],[0,23.36601448059082],[0,44.055850982666016],[0,89.84126281738281],[0,82.56777954101562],[0,171.93055725097656],[0,125.25131225585938],[0,77.51077270507812],[0,162.45982360839844],[0,134.176025390625],[0,133.12774658203125],[0,119.88203430175781],[0,129.044921875],[0,134.4180145263672],[0,29.007503509521484],[0,18.118898391723633],[0,29.343830108642578],[0,239.51205444335938],[0,15.173169136047363],[0,3.6277196407318115],[0,0.9183405041694641],[0,null],[1,null],[0,null],[1,null],[0,8.284884452819824],[1,null],[0,9.716961860656738],[1,null],[0,null],[0,33.729820251464844],[0,30.032651901245117],[0,86.67802429199219],[0,113.50021362304688],[0,142.2181854248047],[0,68.16380310058594],[0,145.42575073242188],[0,146.77464294433594],[0,150.98191833496094],[0,146.2804412841797],[0,135.88204956054688],[0,53.8678092956543],[0,57.09351348876953],[0,76.76563262939453],[0,33.53093338012695],[0,92.0699234008789],[0,17.37963104248047],[1,null],[0,3.624417781829834],[0,0.013449379242956638],[1,null],[0,0.2991788685321808],[0,2.561969757080078],[0,5.311171531677246],[1,null],[1,null],[0,60.75777053833008],[0,113.43736267089844],[0,87.36467742919922],[0,117.51720428466797],[0,99.19708251953125],[0,133.99502563476562],[0,145.2362060546875],[0,102.95492553710938],[0,132.72372436523438],[0,175.77304077148438],[0,166.1863555908203],[0,113.96792602539062],[0,89.3683853149414],[0,124.6726303100586],[0,68.01575469970703],[0,24.873620986938477],[0,36.634910583496094],[0,15.177766799926758],[0,23.42374610900879],[1,null],[0,0.7296919226646423],[0,null],[1,null],[0,0.03536280244588852],[0,0.7983314394950867],[0,2.937636613845825],[0,4.333212852478027],[0,24.39244842529297],[0,32.919586181640625],[0,13.421308517456055],[0,95.57837677001953],[0,117.05744934082031],[0,148.47262573242188],[0,127.54164123535156],[0,104.11068725585938],[0,148.316650390625],[0,185.61300659179688],[0,182.6436309814453],[0,166.91281127929688],[0,112.37937927246094],[0,102.78714752197266],[0,133.880615234375],[0,118.79156494140625],[0,84.5240707397461],[0,31.56827163696289],[0,44.99919128417969],[1,null],[0,1.2407872676849365],[0,4.168402194976807],[0,null],[0,0.04565265029668808],[1,null],[0,0.48129168152809143],[1,null],[0,3.2664921283721924],[0,20.17128562927246],[0,57.63307571411133],[0,64.144775390625],[0,88.20704650878906],[0,150.93215942382812],[0,184.80224609375],[0,168.75802612304688],[0,135.2691650390625],[0,169.40492248535156],[0,129.07177734375],[0,136.43092346191406],[0,116.11768341064453],[0,140.51611328125],[0,152.5086212158203],[0,119.3613510131836],[0,129.22500610351562],[0,56.047454833984375],[0,38.43001174926758],[0,45.40715026855469],[0,5.458353042602539],[0,0.38478827476501465],[1,null],[0,null],[1,null],[0,0.08303885161876678],[0,1.062234878540039],[1,null],[0,8.457086563110352],[1,null],[0,44.44430160522461],[0,138.9776611328125],[0,135.22308349609375],[0,139.28810119628906],[0,139.32440185546875],[0,155.30772399902344],[0,120.51564025878906],[0,103.9222640991211],[0,128.505859375],[0,112.84194946289062],[0,161.79588317871094],[0,146.34307861328125],[0,135.4575958251953],[0,60.63123321533203],[0,116.25125122070312],[0,77.05020904541016],[0,65.1284408569336],[0,27.550905227661133],[0,6.313119411468506],[0,1.0068682432174683],[1,null],[1,null],[0,null],[0,null],[1,null],[0,0.2871297001838684],[1,null],[0,14.436718940734863],[0,97.1427001953125],[0,129.4799346923828],[0,130.28652954101562],[0,69.21920776367188],[0,132.3776092529297],[0,129.29107666015625],[0,131.05413818359375],[0,99.09919738769531],[0,138.4017791748047],[0,153.0939178466797],[0,159.10519409179688],[0,211.12728881835938],[0,131.30184936523438],[0,60.168941497802734],[0,50.81560134887695],[0,54.440616607666016],[0,51.50768280029297],[0,66.73369598388672],[1,null],[0,0.291275292634964],[0,0.00519242137670517],[1,null],[1,null],[1,null],[0,null],[0,2.649477481842041],[0,1.9776029586791992],[0,58.58407211303711],[0,122.65132141113281],[0,136.18565368652344],[0,127.51702117919922],[0,158.70016479492188],[0,126.00608825683594],[0,112.09622192382812],[0,135.12989807128906],[0,150.5045623779297],[0,105.41404724121094],[0,133.42474365234375],[0,115.42967224121094],[0,142.4698028564453],[0,100.9583969116211],[0,74.79712677001953],[0,73.4212417602539],[0,32.663028717041016],[0,36.35174560546875],[0,30.308635711669922],[0,6.141241073608398],[0,2.8354053497314453],[0,0.35650259256362915],[1,null],[0,null],[0,null],[1,null],[1,null],[0,5.740780353546143],[0,46.64597702026367],[0,89.20817565917969],[0,97.92039489746094],[0,207.7889404296875],[0,152.5867462158203],[0,121.72547912597656],[0,69.47515869140625],[0,122.03279113769531],[0,139.2791748046875],[0,118.56683349609375],[0,110.36591339111328],[0,164.4108123779297],[0,207.70574951171875],[0,99.88054656982422],[0,68.52172088623047],[0,104.85599517822266],[0,21.9151611328125],[0,45.37058639526367],[0,6.215793132781982],[1,null],[1,null],[1,null],[1,null],[0,null],[0,null],[1,null],[1,null],[1,null],[0,17.466114044189453],[0,null],[0,null],[0,126.08148956298828],[0,142.13272094726562],[0,135.2097930908203],[0,99.3264389038086],[0,142.63497924804688],[0,134.62350463867188],[0,151.32066345214844],[0,161.14646911621094],[0,134.27146911621094],[0,157.6581268310547],[0,63.40591812133789],[0,122.7708969116211],[0,25.46330451965332],[0,113.5951156616211],[0,35.45155715942383],[1,null],[1,null],[1,null],[0,1.1170583963394165],[1,null],[0,null],[0,null],[1,null],[0,1.4349455833435059],[0,2.127753973007202],[0,4.541579723358154],[0,58.70623016357422],[0,53.28239822387695],[0,250.05648803710938],[0,168.6067352294922],[0,135.10604858398438],[0,146.7425079345703],[0,149.9240264892578],[0,146.15301513671875],[0,157.61782836914062],[0,161.33665466308594],[0,103.30210876464844],[0,109.94728088378906],[0,72.5506362915039],[0,31.240840911865234],[0,30.413311004638672],[0,67.55426025390625],[0,36.01547622680664],[0,11.6470308303833],[1,null],[0,0.9390949606895447],[0,0.6310872435569763],[0,0.08117314428091049],[0,null],[1,null],[1,null],[1,null],[0,7.106752395629883],[0,109.43431091308594],[0,78.17845153808594],[0,114.95313262939453],[0,82.00884246826172],[0,148.4737091064453],[0,128.75390625],[0,111.9906005859375],[0,112.26377868652344],[0,196.87631225585938],[0,116.05011749267578],[0,148.66595458984375],[0,112.04756927490234],[0,108.7159194946289],[0,16.011903762817383],[0,44.250003814697266],[0,38.60552215576172],[0,89.04619598388672],[0,17.92432403564453],[0,5.138716697692871],[0,0.0457286462187767],[0,2.2381131649017334],[0,1.1334431171417236],[1,null],[1,null],[0,0.11589568108320236],[0,2.8734259605407715],[1,null],[0,9.210837364196777],[0,61.18437957763672],[0,85.61979675292969],[0,74.17510223388672],[0,88.57999420166016],[0,213.65121459960938],[0,80.987548828125],[0,130.6873321533203],[0,133.37002563476562],[0,103.12347412109375],[0,164.7811279296875],[0,113.5285415649414],[0,87.9200668334961],[0,74.7564468383789],[0,126.97038269042969],[0,115.7113265991211],[0,40.62505340576172],[0,59.887184143066406],[0,65.25181579589844],[1,null],[1,null],[1,null],[1,null],[1,null],[1,null],[0,0.0523516945540905],[0,4.045091152191162],[0,3.826758623123169],[1,null],[0,17.319238662719727],[0,88.20375061035156],[0,72.65036010742188],[0,86.76988983154297],[0,119.4046401977539],[0,141.6908416748047],[0,140.45396423339844],[0,126.7398910522461],[0,150.10816955566406],[0,100.48445129394531],[0,152.0971221923828],[0,58.17424011230469],[0,20.86981773376465],[0,80.9219970703125],[0,26.0129337310791],[0,25.217378616333008],[0,31.097984313964844],[0,13.387486457824707],[1,null],[1,null],[1,null],[0,0.050356797873973846],[0,null],[0,null],[0,0.01766335219144821],[0,0.2878098785877228],[1,null],[0,9.92090892791748],[0,5.769233226776123],[0,43.12895202636719],[0,27.633384704589844],[0,160.6623077392578],[0,46.630611419677734],[0,64.75743103027344],[0,91.75603485107422],[0,151.471923828125],[0,137.98155212402344],[0,80.44486236572266],[0,56.73762512207031],[0,82.00779724121094],[0,40.983150482177734],[0,49.685787200927734],[0,107.11353302001953],[0,30.203603744506836],[0,48.44743347167969],[0,3.7347426414489746],[1,null],[0,1.4326086044311523],[0,2.367541790008545],[0,0.04984002560377121],[0,null],[0,null],[1,null],[1,null],[0,0.5739117860794067],[1,null],[1,null],[0,29.01795196533203],[0,40.24028015136719],[0,53.48663330078125],[0,39.4897575378418],[0,112.53421783447266],[0,78.6855697631836],[0,125.8359146118164],[0,80.31658935546875],[0,76.32191467285156],[0,71.5235595703125],[0,36.791202545166016],[0,25.334238052368164],[0,29.950178146362305],[0,38.17835235595703],[1,null],[0,7.0898966789245605],[1,null],[1,null],[1,null],[0,0.1473693996667862],[0,0.03454585000872612],[0,null],[1,null],[1,null],[1,null],[1,null],[1,null],[1,null],[1,null],[0,70.19176483154297],[0,70.6726303100586],[0,50.75695037841797],[0,50.796566009521484],[0,73.45909881591797],[0,159.9683837890625],[0,104.62089538574219],[0,64.36152648925781],[0,74.6866226196289],[0,61.50624084472656],[0,70.26496124267578],[0,126.67675018310547],[1,null],[1,null],[0,6.225826740264893],[0,5.195618629455566],[0,0.8828960061073303],[1,null],[0,null],[1,null],[0,null],[0,null],[0,null],[0,null],[0,0.1139007955789566],[1,null],[1,null],[0,5.63050651550293],[0,115.91014862060547],[0,22.546377182006836],[0,145.24940490722656],[0,52.918678283691406],[0,33.210880279541016],[0,64.12989044189453],[0,70.79981231689453],[0,83.57035064697266],[0,16.313968658447266],[0,64.69122314453125],[0,26.223264694213867],[0,0.10428731143474579],[1,null],[0,2.3144853115081787],[0,1.5958356857299805],[0,0.5109756588935852],[0,3.072274684906006],[1,null],[1,null],[0,null],[1,null],[0,null],[0,null],[0,null],[0,null],[0,0.32715296745300293],[0,3.9700927734375],[1,null],[0,3.8085498809814453],[0,9.414178848266602],[0,19.045677185058594],[0,7.412675380706787],[1,null],[0,21.18227195739746],[0,16.459917068481445],[0,21.089750289916992],[0,4.99165678024292],[1,null],[1,null],[1,41.68082809448242],[0,2.8371646404266357],[1,null],[0,6.484032154083252],[0,7.123483180999756],[0,8.140719413757324],[0,0.9315447211265564],[1,null],[0,null],[0,null],[0,null],[1,null],[1,null],[0,null],[0,0.05577151104807854],[0,0.53312087059021],[1,null],[0,0.7429532408714294],[0,8.583498001098633],[1,null],[1,null],[1,null],[1,null],[0,3.9411191940307617],[0,6.634502410888672],[0,5.553213596343994],[0,3.135575532913208],[1,null],[1,null],[1,null],[0,0.16962480545043945],[0,0.42424535751342773],[0,0.27245110273361206],[0,0.23746256530284882],[0,null],[0,null],[0,null],[1,null],[0,null],[1,null],[1,null],[0,null],[0,0.07883627712726593],[0,0.4560610353946686],[1,null],[1,null],[0,0.4576607644557953],[0,0.44933539628982544],[0,1.3628178834915161],[0,0.5309169888496399],[1,null],[0,1.5947717428207397],[0,0.7481856346130371],[0,0.29458490014076233],[0,0.07106949388980865],[1,null],[0,0.25391948223114014],[0,0.3938963711261749],[0,0.23677480220794678],[0,null],[1,null],[0,null],[0,null],[0,null],[1,null],[0,null]];
+
 // Pillow-style bilinear reduction: widen the triangle filter when shrinking.
 function weights(n, m, i) {
   const scale = n / m, width = Math.max(1, scale), center = (i + 0.5) * scale;
@@ -443,9 +554,9 @@ const DEFAULT_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
 const DEFAULT_WRITE_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
 
 function initSettings() {
-  if (el('service')) el('service').value = localStorage.getItem('kanele_ble_service') || DEFAULT_SERVICE_UUID;
-  if (el('write')) el('write').value = localStorage.getItem('kanele_ble_write') || DEFAULT_WRITE_UUID;
-  if (el('pcUrl')) el('pcUrl').value = localStorage.getItem('kanele_pc_url') || '';
+  if (el('service')) el('service').value = safeGet('kanele_ble_service', DEFAULT_SERVICE_UUID);
+  if (el('write')) el('write').value = safeGet('kanele_ble_write', DEFAULT_WRITE_UUID);
+  if (el('pcUrl')) el('pcUrl').value = safeGet('kanele_pc_url', '');
 }
 initSettings();
 
@@ -454,13 +565,13 @@ function updateBleBadge(connected, name) {
   const btn = el('connect');
   if (!badge) return;
   if (connected) {
-    badge.textContent = '[BLE] Da ket noi: ' + (name || 'Kit');
+    badge.textContent = '[BLE] Đã kết nối: ' + (name || 'Kit');
     badge.className = 'status-badge connected';
-    if (btn) btn.textContent = 'Ngat ket noi BLE';
+    if (btn) btn.textContent = 'Ngắt kết nối BLE';
   } else {
-    badge.textContent = '[BLE] Chua ket noi';
+    badge.textContent = '[BLE] Chưa kết nối';
     badge.className = 'status-badge disconnected';
-    if (btn) btn.textContent = 'Ket noi Boolean Board';
+    if (btn) btn.textContent = 'Kết nối Boolean Board';
   }
 }
 
@@ -471,26 +582,26 @@ el('connect').onclick = async () => {
     writer = null;
     gattDevice = null;
     updateBleBadge(false);
-    el('result').textContent = 'Da ngat ket noi BLE.';
+    el('result').textContent = 'Đã ngắt kết nối BLE.';
     return;
   }
 
   try {
     if (!navigator.bluetooth) {
-      throw Error('Trinh duyet can ho tro Web Bluetooth (Chrome Android hoac Bluefy tren iOS qua HTTPS).');
+      throw Error('Trình duyệt cần hỗ trợ Web Bluetooth (Chrome Android hoặc Bluefy trên iOS qua HTTPS).');
     }
     const serviceId = (el('service').value.trim() || DEFAULT_SERVICE_UUID).toLowerCase();
     const writeId = (el('write').value.trim() || DEFAULT_WRITE_UUID).toLowerCase();
-    localStorage.setItem('kanele_ble_service', serviceId);
-    localStorage.setItem('kanele_ble_write', writeId);
+    safeSet('kanele_ble_service', serviceId);
+    safeSet('kanele_ble_write', writeId);
 
-    el('result').textContent = 'Dang quet thiet bi Bluetooth...';
+    el('result').textContent = 'Đang quét thiết bị Bluetooth...';
     const device = await navigator.bluetooth.requestDevice({
       acceptAllDevices: true,
       optionalServices: [serviceId]
     });
 
-    el('result').textContent = 'Dang ket noi toi ' + (device.name || 'kit') + '...';
+    el('result').textContent = 'Đang kết nối tới ' + (device.name || 'kit') + '...';
     gattDevice = device;
     const server = await device.gatt.connect();
     const service = await server.getPrimaryService(serviceId);
@@ -500,14 +611,14 @@ el('connect').onclick = async () => {
       writer = null;
       gattDevice = null;
       updateBleBadge(false);
-      el('result').textContent = 'BLE da ngat ket noi.';
+      el('result').textContent = 'BLE đã ngắt kết nối.';
     });
 
     updateBleBadge(true, device.name);
-    el('result').textContent = '[OK] Da ket noi BLE thanh cong voi ' + (device.name || 'kit') + '!';
+    el('result').textContent = '[OK] Đã kết nối BLE thành công với ' + (device.name || 'kit') + '!';
   } catch (e) {
     updateBleBadge(false);
-    el('result').textContent = 'Loi BLE: ' + e.message;
+    el('result').textContent = 'Lỗi BLE: ' + e.message;
   }
 };
 
@@ -523,7 +634,7 @@ function updatePreview() {
   if (!meta) {
     pctx.fillStyle = '#111';
     pctx.fillRect(0, 0, 28, 28);
-    if (infoEl) infoEl.textContent = 'Chua co net ve.';
+    if (infoEl) infoEl.textContent = 'Chưa có nét vẽ.';
     return null;
   }
 
@@ -543,8 +654,89 @@ function updatePreview() {
   return meta;
 }
 
-// Hook pointer events on canvas to update preview
-pad.addEventListener('pointerup', () => setTimeout(updatePreview, 50));
+// Nút tải file vector (.txt) độc lập, không làm nhảy trang trên Safari iOS
+el('downloadVec').onclick = () => {
+  const meta = updatePreview();
+  if (!meta || !meta.packed) {
+    el('result').textContent = 'Hãy vẽ một chữ số (0 - 9) trước khi tải file vector.';
+    return;
+  }
+  const bits = [];
+  for (const b of meta.packed) {
+    for (let i = 7; i >= 0; i--) bits.push((b >> i) & 1);
+  }
+  const curSeq = (sequence & 65535).toString(16).toUpperCase().padStart(4, '0');
+  const vectorInStr = bits.join(' ');
+  try {
+    const blob = new Blob([vectorInStr + '\n'], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `vectors_in_${curSeq}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      try { document.body.removeChild(a); } catch (_) {}
+    }, 150);
+    el('result').textContent = `[OK] Đã tạo file vectors_in_${curSeq}.txt (${meta.activeBits}/784 bit 1)!\nBạn có thể mang file này vào sim_boolean_frame.tcl trên PC.`;
+  } catch (e) {
+    el('result').textContent = 'Trình duyệt không hỗ trợ tải file trực tiếp. Đã copy vector vào Clipboard!';
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(vectorInStr).catch(() => {});
+  }
+};
+
+// Kiểm tra ACK nền từ PC (non-blocking, không làm treo UI)
+async function checkPcAck(curSeq, noticePrefix, activeBits) {
+  let pcAck = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await new Promise(r => setTimeout(r, 800));
+    try {
+      const ackResp = await fetch('https://ntfy.sh/kanele_vector_ack/json?poll=1&since=10s', { cache: 'no-store' });
+      if (ackResp.ok) {
+        const text = await ackResp.text();
+        const lines = text.trim().split('\n');
+        for (const lineStr of lines) {
+          if (!lineStr) continue;
+          try {
+            const msgObj = JSON.parse(lineStr);
+            if (msgObj.message) {
+              const ackData = JSON.parse(msgObj.message);
+              if (ackData.seq === curSeq) {
+                pcAck = ackData;
+                break;
+              }
+            }
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+    if (pcAck) break;
+  }
+
+  if (pcAck) {
+    const predText = (pcAck.digit !== undefined && pcAck.digit >= 0)
+      ? `• PyTorch Model dự đoán: Số ${pcAck.digit} (Score: ${pcAck.score})\n`
+      : '';
+    el('result').textContent = noticePrefix +
+      `[OK] PC ĐÃ NHẬN VÀ LƯU VECTOR THÀNH CÔNG!\n` +
+      `• Mã Frame Seq: ${curSeq} (Số bit 1: ${activeBits}/784)\n` +
+      predText +
+      `• PC (sync_vector.py) đã ghi đè vào:\n  firmware/sim/custom/vectors_in.txt\n\n` +
+      `• Lệnh mô phỏng Vivado trên PC:\n` +
+      `  vivado -mode batch -source benchmarks/MNIST/boolean/sim_boolean_frame.tcl`;
+  } else {
+    el('result').textContent = noticePrefix +
+      `[OK] ĐÃ PHÁT GÓI TIN LÊN CLOUD RELAY (Seq: ${curSeq})\n` +
+      `• Số bit hoạt động: ${activeBits}/784\n\n` +
+      `[LƯU Ý PC]\n` +
+      `Chưa thấy script 'sync_vector.py' trên PC phản hồi.\n` +
+      `Nếu muốn PC tự động nhận vector và chạy Vivado XSim:\n` +
+      `  1. Mở terminal trên PC\n` +
+      `  2. Chạy: python benchmarks/MNIST/app/sync_vector.py\n` +
+      `  (Gói tin này vẫn đang chờ trên Cloud, PC bật lên là nhận ngay!).`;
+  }
+}
 
 async function transmit(toBoard) {
   if (busy) return;
@@ -552,7 +744,7 @@ async function transmit(toBoard) {
   try {
     const meta = updatePreview();
     if (!meta || !meta.packed) {
-      el('result').textContent = 'Hay ve mot chu so (0 - 9) truoc khi gui.';
+      el('result').textContent = 'Hãy vẽ một chữ số (0 - 9) trước khi gửi.';
       return;
     }
     const payload = meta.packed;
@@ -563,213 +755,110 @@ async function transmit(toBoard) {
       lastBody = body;
     }
     const line = lastLine;
+    const curSeq = line.slice(1, 5);
 
     if (toBoard) {
-      // Feature 1: Gửi FPGA qua BLE
+      // 1. GỬI SANG FPGA QUA BLE
       if (!writer) {
-        throw Error('Chua ket noi Bluetooth! Hay mo muc "Cai dat & Ket noi BLE" de ket noi.');
+        throw Error('Chưa kết nối Bluetooth! Hãy bấm "Cài đặt & Kết nối BLE" để kết nối.');
       }
-      el('result').textContent = 'Dang truyen goi 206 byte sang FPGA qua BLE...';
+      el('result').textContent = 'Đang truyền gói 206 byte sang FPGA qua BLE...';
       const bytes = new TextEncoder().encode(line);
       for (let i = 0; i < bytes.length; i += 20) {
         const chunk = bytes.slice(i, i + 20);
-        if (writer.properties.write) {
+        if (writer.properties && writer.properties.write) {
           await writer.writeValueWithResponse(chunk);
         } else {
           await writer.writeValueWithoutResponse(chunk);
         }
-        // Gian cach 15ms giua cac chunk de tranh tran UART ring-buffer tren radio SoC
         await new Promise(r => setTimeout(r, 15));
       }
-      el('result').textContent = `[GUI BLE XONG] Da truyen 206 byte toi radio BLE (Seq: ${line.slice(1, 5)}).\nQuan sat man hinh HDMI de xem ket qua suy luan.\n(Luu y: Top FPGA chi co UART RX; neu man hinh van giu nguyen so cu hoac dau -, kiem tra BLE/UART 115200 hoac bam Reset tren kit).`;
+      el('result').textContent = `[GỬI BLE THÀNH CÔNG]\n• Đã truyền 206 byte tới radio BLE (Seq: ${curSeq}).\n• Quan sát màn hình HDMI để xem kết quả suy luận.\n(Lưu ý: Mạch FPGA chỉ có UART RX; nếu màn hình vẫn giữ số cũ hoặc dấu -, hãy kiểm tra BLE UART 115200 hoặc bấm RESET trên kit).`;
     } else {
-      // Feature 2: Xuất vector_in trực tiếp & Gửi về PC
-      el('result').textContent = 'Dang trich xuat vector_in...';
+      // 2. GỬI VỀ PC / CLOUD RELAY
+      el('result').textContent = 'Đang trích xuất vector_in...';
 
-      // 1. Chuyển đổi thành 784 bit nhị phân
       const bits = [];
-      for (let b of payload) {
+      for (const b of payload) {
         for (let i = 7; i >= 0; i--) bits.push((b >> i) & 1);
       }
-      const vectorInStr = bits.join(' ');
-      const curSeq = line.slice(1, 5);
 
-      // 2. Tự động tải file vectors_in.txt về máy điện thoại/máy tính (dự phòng offline)
-      try {
-        const blob = new Blob([vectorInStr + '\n'], { type: 'text/plain' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `vectors_in_${curSeq}.txt`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      } catch (err) {
-        console.warn('File auto-download not supported on this browser');
-      }
-
-      // 3. Sao chép 784 bit vào clipboard
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(vectorInStr).catch(() => {});
+        navigator.clipboard.writeText(bits.join(' ')).catch(() => {});
       }
 
-      // 4. Đồng bộ sang PC
       const pcBase = (el('pcUrl')?.value?.trim() || '').replace(/\/+$/, '');
-      if (el('pcUrl')) localStorage.setItem('kanele_pc_url', pcBase);
+      if (el('pcUrl')) safeSet('kanele_pc_url', pcBase);
 
-      // NHÁNH A: Người dùng chủ động nhập URL PC Server (Direct HTTP LAN)
-      if (pcBase) {
-        const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
-        const isLocalhost = /localhost|127\.0\.0\.1/i.test(pcBase);
-        const isHttpsPage = window.location.protocol === 'https:';
-        const isHttpTarget = pcBase.startsWith('http://');
+      const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+      const isLocalhost = /localhost|127\.0\.0\.1/i.test(pcBase);
+      const isHttpsPage = window.location.protocol === 'https:';
+      const isHttpTarget = pcBase.startsWith('http://');
 
-        if (isMobile && isLocalhost) {
-          el('result').textContent = `[LOI CAU HINH PC SERVER]\nBan dang mo app tren dien thoai nhung lai nhap 'localhost' (${pcBase}).\n\n` +
-            `• Tren dien thoai, 'localhost' la ban than dien thoai, KHONG PHAI may tinh PC!\n` +
-            `• Cach 1: Nhap IP mang LAN cua PC (vi du: http://192.168.1.15:8766)\n` +
-            `• Cach 2: Xoa trang o nay (de trong) va dung Cloud Sync (chay 'python sync_vector.py' tren PC)\n` +
-            `• Cach 3: Cam cap USB noi dien thoai voi PC, chay tren PC: adb reverse tcp:8766 tcp:8766\n\n` +
-            `(Da tai file vectors_in_${curSeq}.txt ve dien thoai de du phong).`;
-          return;
-        }
-
-        if (isHttpsPage && isHttpTarget) {
-          el('result').textContent = `[LOI CHAN MIXED CONTENT TRINH DUYET]\nTrang web dang chay tren HTTPS (GitHub Pages) nen trinh duyet chan ket noi truc tiep toi HTTP noi bo (${pcBase}).\n\n` +
-            `• Giai phap khuyen dung: Xoa trang o PC Server (de trong), sau do tren PC chay lenh:\n` +
-            `  python benchmarks/MNIST/app/sync_vector.py\n` +
-            `• Hoac neu muon dung truc tiep: Mo app qua HTTP mang LAN tren PC:\n` +
-            `  python benchmarks/MNIST/app/phone_draw.py --port 8766\n` +
-            `  (Sau do tren dien thoai truy cap http://<IP_PC>:8766)\n\n` +
-            `(Da tai file vectors_in_${curSeq}.txt ve dien thoai de du phong).`;
-          return;
-        }
-
-        el('result').textContent = `Dang ket noi truc tiep toi PC Server: ${pcBase}...`;
-        let pcResponseText = null;
-        let directError = null;
-
+      // Nếu nhập PC URL hợp lệ và không vướng mixed-content thì thử direct fetch
+      if (pcBase && !(isMobile && isLocalhost) && !(isHttpsPage && isHttpTarget)) {
+        el('result').textContent = `Đang kết nối trực tiếp tới PC (${pcBase})...`;
         try {
           const png = await new Promise(r => pad.toBlob(r));
-          const verifyUrl = pcBase + '/verify';
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 4000);
-          const resp = await fetch(verifyUrl, {
+          const timer = setTimeout(() => controller.abort(), 3500);
+          const resp = await fetch(pcBase + '/verify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/octet-stream' },
             body: new Blob([line, png]),
             signal: controller.signal
           });
-          clearTimeout(timeoutId);
+          clearTimeout(timer);
           if (resp.ok) {
-            pcResponseText = await resp.text();
-          } else {
-            directError = `PC Server tra ve ma loi HTTP ${resp.status} (${resp.statusText}).`;
+            const txt = await resp.text();
+            el('result').textContent = `[OK] ĐÃ LƯU TRỰC TIẾP VÀO PC THÀNH CÔNG!\n\n${txt}`;
+            return;
           }
         } catch (e) {
-          directError = `Khong the ket noi toi PC Server tai: ${pcBase}\nChi tiet: ${e.message}\n\n` +
-            `• Kiem tra: Tren PC da chay lenh 'python benchmarks/MNIST/app/phone_draw.py' chua?\n` +
-            `• Kiem tra: Dien thoai va PC co dang ket noi chung mot mang Wi-Fi khong?\n` +
-            `• Kiem tra: Tuong lua Windows Firewall tren PC co dang chan port khong?`;
-        }
-
-        if (directError) {
-          el('result').textContent = `[THAT BAI KET NOI PC]\n${directError}\n\n(Da tai file vectors_in_${curSeq}.txt ve may de du phong).`;
-          return;
-        }
-
-        if (pcResponseText) {
-          el('result').textContent = `[OK] DA LUU VAO PC THANH CONG!\n\n` +
-            pcResponseText +
-            `\n\n(Da tai file vectors_in_${curSeq}.txt ve may)`;
-          return;
+          console.warn('Direct PC fetch failed, falling back to Cloud Relay:', e);
         }
       }
 
-      // NHÁNH B: Người dùng để trống ô PC Server -> Sử dụng Cloud Relay (kanele_vector_sync)
-      el('result').textContent = `Dang phat goi tin len Cloud Relay (Seq: ${curSeq})...`;
+      // Thông báo ghi chú nếu rơi vào trường hợp đặc biệt nhưng VẪN GỬI CLOUD CHỨ KHÔNG CHẶN
+      let noticePrefix = '';
+      if (pcBase && isHttpsPage && isHttpTarget) {
+        noticePrefix = `(Lưu ý: Trang đang mở qua HTTPS nên trình duyệt chặn kết nối trực tiếp tới HTTP LAN. Tự động chuyển qua Cloud Sync)\n\n`;
+      } else if (pcBase && isMobile && isLocalhost) {
+        noticePrefix = `(Lưu ý: 'localhost' trên điện thoại là chính điện thoại, không phải PC. Tự động chuyển qua Cloud Sync)\n\n`;
+      }
+
+      el('result').textContent = noticePrefix + `Đang phát gói tin lên Cloud Relay (Seq: ${curSeq})...`;
+
       let cloudSent = false;
       let cloudError = null;
-
       try {
         const cloudResp = await fetch('https://ntfy.sh/kanele_vector_sync', {
           method: 'POST',
           headers: { 'Title': 'KANELE Vector Frame', 'Priority': 'high' },
-          body: JSON.stringify({
-            line: line,
-            bits: bits,
-            seq: curSeq
-          })
+          body: JSON.stringify({ line: line, bits: bits, seq: curSeq })
         });
         if (cloudResp.ok) cloudSent = true;
-        else cloudError = `Cloud Relay tra ve ma HTTP ${cloudResp.status}`;
+        else cloudError = `Cloud Relay trả về mã HTTP ${cloudResp.status}`;
       } catch (err) {
         cloudError = err.message;
       }
 
       if (!cloudSent) {
-        el('result').textContent = `[LOI GUI CLOUD RELAY]\nKhong the gui du lieu len Cloud: ${cloudError}\n` +
-          `• Kiem tra ket noi Internet (Wi-Fi/4G) cua dien thoai.\n` +
-          `• (Da tai file vectors_in_${curSeq}.txt ve may de du phong).`;
+        el('result').textContent = `[LỖI GỬI DỮ LIỆU]\nKhông thể gửi lên Cloud Relay: ${cloudError}\n• Kiểm tra kết nối Internet (Wi-Fi/4G) của điện thoại.\n• Bạn có thể bấm nút "Tải file vector (.txt)" để lưu thủ công.`;
         return;
       }
 
-      // Đã gửi lên Cloud Relay xong. Thăm dò (poll) ACK phản hồi thực sự từ PC trong vòng 3 giây
-      el('result').textContent = `Da phat len Cloud (Seq: ${curSeq}). Dang cho xac nhan tu PC (sync_vector.py)...`;
-      let pcAck = null;
+      el('result').textContent = noticePrefix +
+        `[OK] ĐÃ PHÁT GÓI TIN LÊN CLOUD RELAY!\n` +
+        `• Mã Frame Seq: ${curSeq} (Số bit 1: ${meta.activeBits}/784)\n` +
+        `• Đã chuyển tiếp dữ liệu vector lên Cloud an toàn.\n` +
+        `• Đang kiểm tra phản hồi từ PC (sync_vector.py)...`;
 
-      for (let attempt = 0; attempt < 4; attempt++) {
-        await new Promise(r => setTimeout(r, 700));
-        try {
-          const ackResp = await fetch('https://ntfy.sh/kanele_vector_ack/json?poll=1&since=10s', {
-            cache: 'no-store'
-          });
-          if (ackResp.ok) {
-            const text = await ackResp.text();
-            const lines = text.trim().split('\n');
-            for (const lineStr of lines) {
-              if (!lineStr) continue;
-              try {
-                const msgObj = JSON.parse(lineStr);
-                if (msgObj.message) {
-                  const ackData = JSON.parse(msgObj.message);
-                  if (ackData.seq === curSeq) {
-                    pcAck = ackData;
-                    break;
-                  }
-                }
-              } catch (parseErr) {}
-            }
-          }
-        } catch (pollErr) {
-          console.warn('Poll ACK error:', pollErr);
-        }
-        if (pcAck) break;
-      }
-
-      if (pcAck) {
-        const predText = (pcAck.digit !== undefined && pcAck.digit >= 0)
-          ? `* PyTorch Model tren PC du doan: So ${pcAck.digit} (Score: ${pcAck.score})\n`
-          : '';
-        el('result').textContent = `[OK] XAC NHAN TU PC: DA LUU VECTOR THANH CONG!\n` +
-          `* Ma Frame Seq: ${curSeq} (So bit 1: ${meta.activeBits}/784)\n` +
-          predText +
-          `* PC (sync_vector.py) DA XAC NHAN ghi de vao:\n` +
-          `  firmware/sim/custom/vectors_in.txt\n\n` +
-          `* Lenh mo phong Vivado tren PC:\n` +
-          `  vivado -mode batch -source benchmarks/MNIST/boolean/sim_boolean_frame.tcl\n\n` +
-          `* Da tai file: vectors_in_${curSeq}.txt ve may!`;
-      } else {
-        el('result').textContent = `[CANH BAO] CHUA NHAN DUOC PHAN HOI TU PC!\n` +
-          `Goi tin da phat len Cloud Relay (Seq: ${curSeq}), NHUNG PC CHUA PHAN HOI XAC NHAN.\n\n` +
-          `• Nguyen nhan: May tinh PC chua bat hoac chua chay lenh sau tren terminal:\n` +
-          `  python benchmarks/MNIST/app/sync_vector.py\n\n` +
-          `• Luu y: File 'vectors_in.txt' tren PC CHUA DUOC CAP NHAT!\n` +
-          `  Hay kiem tra terminal PC chay sync_vector.py roi bam gui lai.\n` +
-          `  (Da tu dong tai file vectors_in_${curSeq}.txt ve may de du phong).`;
-      }
+      // Kiểm tra ACK từ PC ở chế độ nền (không khóa UI)
+      checkPcAck(curSeq, noticePrefix, meta.activeBits);
     }
   } catch (e) {
-    el('result').textContent = 'Loi: ' + e.message;
+    el('result').textContent = 'Lỗi: ' + e.message;
   } finally {
     busy = false;
   }
@@ -777,9 +866,6 @@ async function transmit(toBoard) {
 
 el('board').onclick = () => transmit(true);
 el('verify').onclick = () => transmit(false);
-
-
-
   </script>
 </body>
 </html>
