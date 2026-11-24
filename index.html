@@ -615,7 +615,7 @@ function crc(bytes) {
   return c;
 }
 
-let writer = null, gattDevice = null, sequence = 0, busy = false, lastBody = null, lastLine = null;
+let writer = null, gattDevice = null, sequence = Math.floor(Math.random() * 0x10000), busy = false, lastBody = null, lastLine = null, activeRequestId = 0;
 const el = id => document.getElementById(id);
 
 // Load persisted BLE settings
@@ -755,10 +755,13 @@ el('downloadVec').onclick = () => {
 };
 
 // Kiểm tra ACK phản hồi từ PC (sync_vector.py) trong nền, không khóa UI
-async function checkPcAck(curSeq, activeBits) {
+async function checkPcAck(curSeq, activeBits, reqId) {
   let pcAck = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  const pollStart = Date.now();
+  for (let attempt = 0; attempt < 4; attempt++) {
     await new Promise(r => setTimeout(r, 800));
+    // Nếu người dùng đã phát sinh yêu cầu gửi mới, hủy tác vụ cũ ngay lập tức
+    if (reqId !== activeRequestId) return;
     try {
       const ackResp = await fetch('https://ntfy.sh/kanele_vector_ack/json?poll=1&since=10s', { cache: 'no-store' });
       if (ackResp.ok) {
@@ -770,7 +773,9 @@ async function checkPcAck(curSeq, activeBits) {
             const msgObj = JSON.parse(lineStr);
             if (msgObj.message) {
               const ackData = JSON.parse(msgObj.message);
-              if (ackData.seq === curSeq) {
+              // Khớp mã sequence và xác thực tính tươi mới (timestamp sau thời điểm bắt đầu gửi)
+              const ackTime = ackData.timestamp ? ackData.timestamp * 1000 : 0;
+              if (ackData.seq === curSeq && (!ackTime || ackTime >= pollStart - 3000)) {
                 pcAck = ackData;
                 break;
               }
@@ -782,7 +787,18 @@ async function checkPcAck(curSeq, activeBits) {
     if (pcAck) break;
   }
 
+  // Chỉ cập nhật giao diện nếu yêu cầu này vẫn là yêu cầu kích hoạt mới nhất
+  if (reqId !== activeRequestId) return;
+
   if (pcAck) {
+    if (pcAck.status === 'error') {
+      el('result').textContent =
+        `[CẢNH BÁO PC] PC ĐÃ NHẬN GÓI TIN NHƯNG GẶP LỖI!\n` +
+        `• Mã Frame Seq: ${curSeq}\n` +
+        `• Lỗi báo về: ${pcAck.error || 'Lỗi inference trên PC'}\n` +
+        `• PC (sync_vector.py) KHÔNG ghi đè để bảo vệ bộ dữ liệu mô phỏng.`;
+      return;
+    }
     const predText = (pcAck.digit !== undefined && pcAck.digit >= 0)
       ? `• PyTorch Model trên PC dự đoán: Số ${pcAck.digit} (Score: ${pcAck.score})\n`
       : '';
@@ -844,6 +860,7 @@ async function transmit(toBoard) {
       el('result').textContent = `[GỬI BLE THÀNH CÔNG]\n• Đã truyền 206 byte tới radio BLE (Seq: ${curSeq}).\n• Quan sát màn hình HDMI để xem kết quả suy luận.\n(Lưu ý: Mạch FPGA chỉ có UART RX; nếu màn hình vẫn giữ số cũ hoặc dấu -, hãy kiểm tra BLE UART 115200 hoặc bấm RESET trên kit).`;
     } else {
       // 2. GỬI VỀ PC (ƯU TIÊN LAN PC SERVER TRỰC TIẾP, FALLBACK CLOUD RELAY NẾU MỞ TỪ GITHUB PAGES HOẶC LỖI)
+      const thisRequestId = ++activeRequestId;
       el('result').textContent = `Đang kết nối gửi dữ liệu về PC (Seq: ${curSeq})...`;
 
       const bits = [];
@@ -902,7 +919,7 @@ async function transmit(toBoard) {
         `• Đang kiểm tra phản hồi từ PC (sync_vector.py)...`;
 
       // Kiểm tra ACK từ PC ở chế độ nền (không khóa giao diện)
-      checkPcAck(curSeq, meta.activeBits);
+      checkPcAck(curSeq, meta.activeBits, thisRequestId);
     }
   } catch (e) {
     el('result').textContent = 'Lỗi: ' + e.message;
