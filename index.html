@@ -5,130 +5,167 @@
   <meta name="google" content="notranslate">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>KANELE MNIST -- BLE FPGA & PC Verification</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #0f172a;
-      --card: #1e293b;
-      --border: #334155;
+      --bg: #0b0f19;
+      --card: #111827;
+      --card-border: #1f293d;
+      --border: #1e293b;
+      --border-hover: #334155;
+      --border-focus: #3b82f6;
       --text: #f8fafc;
       --text-muted: #94a3b8;
+      --text-dim: #64748b;
       --primary: #2563eb;
       --primary-hover: #1d4ed8;
+      --primary-active: #1e40af;
       --success: #059669;
       --success-hover: #047857;
-      --surface: #020617;
+      --surface: #060911;
+      --cyan: #38bdf8;
+      --cyan-dim: rgba(56, 189, 248, 0.08);
+      --cyan-border: rgba(56, 189, 248, 0.25);
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: var(--bg);
+      font-family: var(--font-sans);
+      background-color: var(--bg);
+      background-image: radial-gradient(circle at 50% 0%, #172138 0%, #0b0f19 75%);
       color: var(--text);
       max-width: 480px;
+      min-height: 100vh;
       margin: 0 auto;
-      padding: 16px;
+      padding: 24px 16px 36px;
       line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
     header {
       text-align: center;
-      margin-bottom: 16px;
+      margin-bottom: 20px;
     }
     h1 {
-      font-size: 20px;
+      font-size: 21px;
       font-weight: 700;
-      color: #38bdf8;
-      letter-spacing: 0.5px;
+      color: #f8fafc;
+      letter-spacing: -0.025em;
     }
     .subtitle {
       font-size: 13px;
+      font-weight: 400;
       color: var(--text-muted);
-      margin-top: 2px;
+      margin-top: 4px;
+      letter-spacing: -0.01em;
     }
     .badge-container {
       display: flex;
       justify-content: center;
-      margin-top: 8px;
+      margin-top: 10px;
     }
     .status-badge {
       display: inline-flex;
       align-items: center;
       font-size: 12px;
-      padding: 4px 12px;
+      font-weight: 500;
+      padding: 4px 14px;
       border-radius: 9999px;
-      font-weight: 600;
+      letter-spacing: 0.01em;
+      transition: all 0.2s ease;
     }
     .status-badge.connected {
-      background: rgba(16, 185, 129, 0.2);
+      background: rgba(16, 185, 129, 0.12);
       color: #34d399;
-      border: 1px solid rgba(16, 185, 129, 0.4);
+      border: 1px solid rgba(52, 211, 153, 0.35);
     }
     .status-badge.disconnected {
-      background: rgba(148, 163, 184, 0.15);
+      background: rgba(148, 163, 184, 0.08);
       color: var(--text-muted);
       border: 1px solid var(--border);
     }
     .card {
       background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 14px;
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 16px;
       margin-bottom: 14px;
+      box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5), 0 2px 6px -1px rgba(0, 0, 0, 0.3);
     }
     .canvas-layout {
       display: flex;
-      gap: 12px;
-      align-items: flex-start;
+      gap: 14px;
+      align-items: center;
       justify-content: center;
     }
     canvas#pad {
       display: block;
       width: 250px;
       height: 250px;
-      background: #000;
-      border: 2px solid #38bdf8;
-      border-radius: 10px;
+      background: #000000;
+      border: 2px solid var(--primary);
+      border-radius: 12px;
       touch-action: none;
       cursor: crosshair;
       user-select: none;
       -webkit-user-select: none;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    canvas#pad:active {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
     }
     .preview-box {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 6px;
+      gap: 8px;
     }
     canvas#preview {
       display: block;
       width: 84px;
       height: 84px;
-      background: #000;
+      background: #000000;
       border: 1px solid var(--border);
-      border-radius: 6px;
+      border-radius: 8px;
       image-rendering: pixelated;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
     }
     .preview-label {
       font-size: 11px;
+      font-weight: 500;
       color: var(--text-muted);
       text-align: center;
+      line-height: 1.4;
     }
     .preprocess-info {
       font-size: 11px;
-      color: #38bdf8;
+      font-family: var(--font-mono);
+      color: var(--cyan);
+      background: var(--cyan-dim);
+      border: 1px solid var(--cyan-border);
       text-align: center;
-      margin-top: 8px;
-      font-family: monospace;
+      margin-top: 12px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      letter-spacing: -0.01em;
     }
     .button-group {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      margin-top: 12px;
+      gap: 9px;
+      margin-top: 14px;
     }
     button {
-      font-family: inherit;
-      font-size: 15px;
+      font-family: var(--font-sans);
+      font-size: 14px;
       font-weight: 600;
+      letter-spacing: 0.01em;
       padding: 12px 14px;
       border-radius: 8px;
       border: none;
@@ -136,104 +173,146 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: all 0.15s ease;
+      text-align: center;
+      transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
       touch-action: manipulation;
     }
+    button:focus-visible {
+      outline: 2px solid #3b82f6;
+      outline-offset: 2px;
+    }
     button:active {
-      transform: scale(0.98);
+      transform: scale(0.985);
     }
     button.btn-ble {
       background: var(--primary);
-      color: #fff;
+      color: #ffffff;
+      box-shadow: 0 1px 3px rgba(37, 99, 235, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15);
     }
-    button.btn-ble:hover { background: var(--primary-hover); }
+    button.btn-ble:hover {
+      background: var(--primary-hover);
+    }
     button.btn-verify {
       background: var(--success);
-      color: #fff;
+      color: #ffffff;
+      box-shadow: 0 1px 3px rgba(5, 150, 105, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15);
     }
-    button.btn-verify:hover { background: var(--success-hover); }
+    button.btn-verify:hover {
+      background: var(--success-hover);
+    }
     .btn-row {
       display: flex;
-      gap: 8px;
+      gap: 9px;
     }
     .btn-row button {
       flex: 1;
     }
     button.btn-download {
-      background: rgba(56, 189, 248, 0.15);
-      color: #38bdf8;
-      border: 1px solid rgba(56, 189, 248, 0.3);
+      background: var(--cyan-dim);
+      color: var(--cyan);
+      border: 1px solid var(--cyan-border);
     }
-    button.btn-download:hover { background: rgba(56, 189, 248, 0.25); }
+    button.btn-download:hover {
+      background: rgba(56, 189, 248, 0.16);
+      border-color: rgba(56, 189, 248, 0.4);
+    }
     button.btn-clear {
-      background: rgba(148, 163, 184, 0.2);
-      color: var(--text);
+      background: rgba(148, 163, 184, 0.1);
+      color: #f1f5f9;
       border: 1px solid var(--border);
     }
-    button.btn-clear:hover { background: rgba(148, 163, 184, 0.3); }
+    button.btn-clear:hover {
+      background: rgba(148, 163, 184, 0.18);
+      border-color: var(--border-hover);
+    }
     output#result {
       display: block;
-      margin-top: 10px;
-      padding: 10px;
+      margin-top: 14px;
+      padding: 12px 14px;
       border-radius: 8px;
       background: var(--surface);
       border: 1px solid var(--border);
-      font-size: 13px;
-      font-family: monospace;
+      border-left: 3px solid var(--primary);
+      font-size: 12px;
+      font-family: var(--font-mono);
+      line-height: 1.6;
       white-space: pre-wrap;
       word-break: break-word;
       color: #e2e8f0;
-      min-height: 48px;
+      min-height: 52px;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
     }
     details {
       background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 10px 14px;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 12px 16px;
       font-size: 13px;
-      margin-top: 12px;
+      margin-top: 14px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      transition: border-color 0.2s ease;
+    }
+    details[open] {
+      border-color: var(--border-hover);
     }
     summary {
+      font-family: var(--font-sans);
+      font-size: 13px;
       font-weight: 600;
       cursor: pointer;
-      color: #38bdf8;
+      color: #cbd5e1;
       user-select: none;
+      transition: color 0.15s ease;
+    }
+    summary:hover {
+      color: #f8fafc;
+    }
+    summary:focus-visible {
+      outline: 2px solid #3b82f6;
+      border-radius: 4px;
     }
     .settings-body {
-      margin-top: 10px;
+      margin-top: 12px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      padding-top: 12px;
     }
     label {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 5px;
+      font-family: var(--font-sans);
       font-size: 12px;
+      font-weight: 500;
       color: var(--text-muted);
     }
     input {
-      font-family: monospace;
-      font-size: 13px;
-      padding: 8px 10px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      padding: 9px 12px;
       background: var(--surface);
       color: var(--text);
       border: 1px solid var(--border);
       border-radius: 6px;
       width: 100%;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
     input:focus {
       outline: none;
-      border-color: #38bdf8;
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
     }
   </style>
 </head>
 <body>
   <header>
     <h1>KANELE MNIST FPGA</h1>
-    <div class="subtitle">Standalone BLE & HDMI Hardware Acceleration</div>
+    <div class="subtitle">Hệ thống kiểm chứng phần cứng BLE và PC</div>
     <div class="badge-container">
-      <span id="bleBadge" class="status-badge disconnected">[BLE] Chưa kết nối</span>
+      <span id="bleBadge" class="status-badge disconnected">Chưa kết nối Bluetooth (BLE)</span>
     </div>
   </header>
 
@@ -244,35 +323,35 @@
       </div>
       <div class="preview-box">
         <canvas id="preview" width="28" height="28"></canvas>
-        <div class="preview-label">Chuẩn 28x28<br>(FPGA Input)</div>
+        <div class="preview-label">Ảnh chuẩn 28×28<br>(Đầu vào FPGA)</div>
       </div>
     </div>
-    <div id="preprocessInfo" class="preprocess-info">Vẽ một chữ số (0 - 9) bằng ngón tay...</div>
+    <div id="preprocessInfo" class="preprocess-info">Vẽ một chữ số (0 – 9) trên bảng vẽ...</div>
 
     <div class="button-group">
-      <button id="board" class="btn-ble">Gửi FPGA qua Bluetooth (BLE)</button>
-      <button id="verify" class="btn-verify">Gửi về PC (Trích vector & Kiểm chứng)</button>
+      <button id="board" class="btn-ble">Gửi sang FPGA qua Bluetooth (BLE)</button>
+      <button id="verify" class="btn-verify">Gửi về PC (Trích vector và kiểm chứng)</button>
       <div class="btn-row">
-        <button id="downloadVec" class="btn-download">Tải file vector (.txt)</button>
+        <button id="downloadVec" class="btn-download">Tải tệp vector (.txt)</button>
         <button id="clear" class="btn-clear">Xóa nét vẽ</button>
       </div>
     </div>
 
-    <output id="result" aria-live="polite">Sẵn sàng. Hãy vẽ chữ số trên màn hình.</output>
+    <output id="result" aria-live="polite">Hệ thống sẵn sàng. Hãy vẽ chữ số trên màn hình.</output>
   </div>
 
   <details>
-    <summary>Cài đặt & Kết nối Bluetooth (BLE)</summary>
+    <summary>Cài đặt và kết nối Bluetooth (BLE)</summary>
     <div class="settings-body">
       <label>
-        Service UUID (Nordic UART Service)
+        Mã dịch vụ UUID (Nordic UART Service)
         <input id="service" value="6e400001-b5a3-f393-e0a9-e50e24dcca9e">
       </label>
       <label>
-        Write Characteristic UUID
+        Mã đặc tính ghi UUID (Write Characteristic)
         <input id="write" value="6e400002-b5a3-f393-e0a9-e50e24dcca9e">
       </label>
-      <button id="connect" class="btn-ble" style="margin-top: 4px;">Kết nối Boolean Board</button>
+      <button id="connect" class="btn-ble" style="margin-top: 4px;">Kết nối bo mạch Boolean</button>
     </div>
   </details>
 
@@ -418,7 +497,7 @@
       activePointerId = null;
       ctx.fillStyle = 'black';
       ctx.fillRect(0, 0, 250, 250);
-      result.textContent = 'Đã xóa. Hãy vẽ chữ số mới.';
+      result.textContent = 'Đã xóa nét vẽ. Hãy vẽ chữ số mới.';
       const prevCanvas = document.getElementById('preview');
       if (prevCanvas) {
         const pctx = prevCanvas.getContext('2d');
@@ -426,7 +505,7 @@
         pctx.fillRect(0, 0, 28, 28);
       }
       const infoEl = document.getElementById('preprocessInfo');
-      if (infoEl) infoEl.textContent = 'Vẽ một chữ số (0 - 9) bằng ngón tay...';
+      if (infoEl) infoEl.textContent = 'Vẽ một chữ số (0 – 9) trên bảng vẽ...';
     }
     clearPad();
     document.getElementById('clear').onclick = clearPad;
@@ -554,13 +633,13 @@ function updateBleBadge(connected, name) {
   const btn = el('connect');
   if (!badge) return;
   if (connected) {
-    badge.textContent = '[BLE] Đã kết nối: ' + (name || 'Kit');
+    badge.textContent = 'Đã kết nối Bluetooth: ' + (name || 'Bo mạch');
     badge.className = 'status-badge connected';
-    if (btn) btn.textContent = 'Ngắt kết nối BLE';
+    if (btn) btn.textContent = 'Ngắt kết nối Bluetooth';
   } else {
-    badge.textContent = '[BLE] Chưa kết nối';
+    badge.textContent = 'Chưa kết nối Bluetooth (BLE)';
     badge.className = 'status-badge disconnected';
-    if (btn) btn.textContent = 'Kết nối Boolean Board';
+    if (btn) btn.textContent = 'Kết nối bo mạch Boolean';
   }
 }
 
@@ -647,7 +726,7 @@ function updatePreview() {
 el('downloadVec').onclick = () => {
   const meta = updatePreview();
   if (!meta || !meta.packed) {
-    el('result').textContent = 'Hãy vẽ một chữ số (0 - 9) trước khi tải file vector.';
+    el('result').textContent = 'Hãy vẽ một chữ số (0 – 9) trước khi tải tệp vector.';
     return;
   }
   const bits = [];
@@ -749,7 +828,7 @@ async function transmit(toBoard) {
     if (toBoard) {
       // 1. GỬI SANG FPGA QUA BLUETOOTH BLE
       if (!writer) {
-        throw Error('Chưa kết nối Bluetooth! Hãy bấm "Cài đặt & Kết nối Bluetooth (BLE)" bên dưới để kết nối.');
+        throw Error('Chưa kết nối Bluetooth! Hãy bấm "Cài đặt và kết nối Bluetooth (BLE)" bên dưới để kết nối.');
       }
       el('result').textContent = 'Đang truyền gói 206 byte sang FPGA qua BLE...';
       const bytes = new TextEncoder().encode(line);
